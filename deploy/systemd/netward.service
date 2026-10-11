@@ -1,0 +1,63 @@
+# Example systemd unit for netward. See the README for the installation steps.
+#
+# netward runs as an unprivileged user that systemd creates on start
+# (DynamicUser). It reads its configuration from /etc/netward/netward.yaml
+# and keeps its database and self-signed certificate in /var/lib/netward,
+# because relative paths in the configuration resolve against the working
+# directory.
+
+[Unit]
+Description=netward network warden
+Documentation=https://github.com/devusSs/netward
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/netward -config /etc/netward/netward.yaml
+Restart=on-failure
+RestartSec=10s
+
+DynamicUser=yes
+StateDirectory=netward
+StateDirectoryMode=0700
+ConfigurationDirectory=netward
+WorkingDirectory=/var/lib/netward
+UMask=0077
+
+# netward needs no capabilities. Its pings are unprivileged and need the
+# net.ipv4.ping_group_range sysctl to include netward's group, which
+# systemd 243 and later allow for all groups by default. To send privileged
+# pings instead, set ping.privileged: true in the configuration and
+# uncomment the two lines below the empty CapabilityBoundingSet.
+CapabilityBoundingSet=
+#AmbientCapabilities=CAP_NET_RAW
+#CapabilityBoundingSet=CAP_NET_RAW
+
+# Hardening. netward needs IP and netlink sockets for its checks and reads
+# the routing tables in /proc/net, so the network and /proc stay visible.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

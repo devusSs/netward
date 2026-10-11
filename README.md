@@ -76,6 +76,23 @@ netward then checks the configured features right away and on their intervals, s
 
 Stop netward with Ctrl+C or `SIGTERM`. It cancels checks that are still running, without saving partial results, and shuts down cleanly.
 
+### Running with systemd
+
+[`deploy/systemd/netward.service`](./deploy/systemd/netward.service) is an example unit for Linux systems with systemd. It runs netward as an unprivileged, sandboxed user, reads the configuration from `/etc/netward/netward.yaml` and keeps the database and certificate in `/var/lib/netward`.
+
+netward needs no cgo, so you can also build it for another machine, for example `GOOS=linux GOARCH=arm64 go build -o netward ./cmd/netward` for a 64-bit Raspberry Pi. Then install and start it:
+
+```sh
+sudo install -m 0755 netward /usr/local/bin/netward
+sudo install -d /etc/netward
+sudo install -m 0644 netward.example.yaml /etc/netward/netward.yaml
+sudo install -m 0644 deploy/systemd/netward.service /etc/systemd/system/netward.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now netward
+```
+
+Follow the logs with `journalctl -u netward -f`. After changing the configuration, run `sudo systemctl restart netward`.
+
 ## Disclaimer
 
 netward is a hobby project. Its authors maintain it for their own home networks and for fun, and it is not intended for production use.
