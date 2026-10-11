@@ -21,7 +21,7 @@ By default, netward monitors:
 
 The following features can be enabled optionally:
 
-- **Domain IP monitoring**, which uses the host device's system resolver by default.
+- **Domain IP monitoring**, which resolves the configured domains to their IPv4 and IPv6 addresses and records when they change, for example to check that a dynamic DNS name points at your current public IP address. It uses the host device's system resolver by default or a DNS server of your choice, such as `1.1.1.1` or your local DNS server.
 
 More features may be added in the future.
 
@@ -29,6 +29,7 @@ You can also configure custom endpoints for:
 
 - Public IPv4 and IPv6 address lookups
 - Connectivity and latency checks
+- Domain lookups (a DNS server instead of the system resolver)
 
 and limit the monitored network interfaces, for example to exclude Docker or VPN interfaces.
 
