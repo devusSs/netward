@@ -150,6 +150,7 @@ linters:
       allow-empty-blank-assignments: true
       allow-empty-returns: true
       ignore-patterns:
+        - ^crypto/tls.Config$
         - ^net/http.Client$
         - ^net/http.Cookie$
         - ^net/http.Request$
