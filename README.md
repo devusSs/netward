@@ -55,6 +55,8 @@ netward needs Go 1.27 or later to build:
 go build -o netward ./cmd/netward
 ```
 
+Alternatively, `make` generates the database code with sqlc, runs golangci-lint and builds netward for Linux and macOS on amd64 and arm64 and for 32-bit ARM Linux into `bin/`. It installs sqlc and golangci-lint with `go install` if they are missing; `make install-tools` installs or updates sqlc, goose and golangci-lint.
+
 Copy [`netward.example.yaml`](./netward.example.yaml) to `netward.yaml` and change what you need. Every setting has a default, so the file can be short or missing entirely.
 
 Pings are sent without root privileges. On Linux this requires the `net.ipv4.ping_group_range` sysctl to include the group netward runs as, for example:
