@@ -155,7 +155,6 @@ func rangeOptions(active string) []rangeOption {
 		{Value: "1h", Label: "1 hour", Active: false},
 		{Value: "24h", Label: "24 hours", Active: false},
 		{Value: "7d", Label: "7 days", Active: false},
-		{Value: "30d", Label: "30 days", Active: false},
 	}
 
 	for i := range options {

@@ -403,7 +403,8 @@ func TestAPIChangesRejectsBadParameters(t *testing.T) {
 	for _, target := range []string{
 		"/api/changes?since=forever",
 		"/api/changes?since=-1h",
-		"/api/changes?since=32d",
+		"/api/changes?since=8d",
+		"/api/changes?since=169h",
 		"/api/changes?since=0d",
 		"/api/changes?limit=0",
 		"/api/changes?limit=1001",

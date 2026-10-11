@@ -20,8 +20,10 @@ import (
 )
 
 const (
-	defaultRange       = 24 * time.Hour
-	maxRange           = 31 * 24 * time.Hour
+	defaultRange = 24 * time.Hour
+	// maxRange keeps change lists within what the history service reads:
+	// about a week of snapshots at the default interval.
+	maxRange           = 7 * 24 * time.Hour
 	defaultChangeLimit = 100
 	maxChangeLimit     = 1000
 	millisPerSecond    = 1000
@@ -33,7 +35,7 @@ func farFuture() time.Time {
 	return time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 }
 
-// parseRange parses a time range like "24h", "90m" or "7d", up to 31 days.
+// parseRange parses a time range like "24h", "90m" or "7d", up to 7 days.
 // An empty string means 24 hours.
 func parseRange(value string) (time.Duration, error) {
 	if value == "" {
@@ -55,7 +57,7 @@ func parseRange(value string) (time.Duration, error) {
 	}
 
 	if err != nil || d <= 0 || d > maxRange {
-		return 0, fmt.Errorf("range %q must be a positive duration like 24h or 7d of at most 31d", value)
+		return 0, fmt.Errorf("range %q must be a positive duration like 24h or 7d of at most 7d", value)
 	}
 
 	return d, nil
