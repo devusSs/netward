@@ -41,8 +41,8 @@
 
 body {
   margin: 0 auto;
-  max-width: 1200px;
-  padding: 24px 16px 40px;
+  max-width: 1600px;
+  padding: 24px 24px 40px;
   background: var(--bg);
   color: var(--text);
   font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -63,7 +63,7 @@ header.site p { margin: 0; color: var(--muted); }
 
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -85,17 +85,18 @@ h2 { margin: 0 0 10px; font-size: 1.05rem; }
 .taken { margin: 10px 0 0; }
 .empty { margin: 4px 0; }
 
-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-td:nth-child(2) { width: 6.5em; }
-th, td { padding: 7px 0; border-top: 1px solid var(--border); vertical-align: top; text-align: left; }
-tbody tr:first-child th, tbody tr:first-child td { border-top: 0; }
-th { width: 32%; font-weight: 500; padding-right: 10px; overflow-wrap: anywhere; }
-td:nth-child(2) { padding-right: 10px; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.row { padding: 9px 0; border-top: 1px solid var(--border); }
+.row:first-child { border-top: 0; padding-top: 2px; }
 
-.value { overflow-wrap: anywhere; }
-.value span { display: block; font-family: var(--mono); font-size: 0.9rem; }
-.value small { display: block; color: var(--muted); }
-.value small.message, .change .message { color: var(--fail-fg); }
+.row-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 2px; }
+.label { font-weight: 500; overflow-wrap: anywhere; }
+
+/* Addresses get the card's full width, so they stay on one line; they only
+   break on screens too narrow for them. */
+.value { font-family: var(--mono); font-size: 0.95rem; overflow-wrap: anywhere; }
+.detail { color: var(--muted); font-size: 0.85rem; }
+.message, .change .message { color: var(--fail-fg); font-size: 0.85rem; overflow-wrap: anywhere; }
 
 .status {
   display: inline-block;

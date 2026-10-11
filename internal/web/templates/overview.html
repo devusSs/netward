@@ -1,5 +1,6 @@
 {{define "overview" -}}
-<main id="overview" hx-get="/fragments/overview?range={{.Range}}" hx-trigger="every 30s" hx-swap="outerHTML">
+<main id="overview" hx-get="/fragments/overview?range={{.Range}}" hx-trigger="every 30s" hx-swap="outerHTML"
+      data-server-time="{{.ServerTime}}">
   <section class="cards" aria-label="Current state">
     {{- range .Cards}}{{template "card" .}}{{end}}
   </section>
@@ -48,22 +49,26 @@
   {{- if not .Enabled}}
   <p class="note">Disabled in the configuration. Showing the last check.</p>
   {{- end}}
-  <table>
-    <tbody>
-      {{- range .Rows}}
-      <tr>
-        <th scope="row">{{.Label}}</th>
-        <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
-        <td class="value">
-          {{- range .Values}}<span>{{.}}</span>{{end}}
-          {{- if .Detail}}<small>{{.Detail}}</small>{{end}}
-          {{- if .Message}}<small class="message">{{.Message}}</small>{{end}}
-        </td>
-      </tr>
+  <ul class="rows">
+    {{- range .Rows}}
+    <li class="row">
+      <div class="row-head">
+        <span class="label">{{.Label}}</span>
+        <span class="status status-{{.Status}}">{{.Status}}</span>
+      </div>
+      {{- range .Values}}
+      <div class="value">{{.}}</div>
       {{- end}}
-    </tbody>
-  </table>
-  <p class="taken" title="{{.TakenAt}}">Checked {{.Taken}}</p>
+      {{- if .Detail}}
+      <div class="detail">{{.Detail}}</div>
+      {{- end}}
+      {{- if .Message}}
+      <div class="message">{{.Message}}</div>
+      {{- end}}
+    </li>
+    {{- end}}
+  </ul>
+  <p class="taken" title="{{.TakenAt}}">Checked <time datetime="{{.TakenISO}}" data-relative>{{.Taken}}</time></p>
   {{- else if .Enabled}}
   <p class="empty">No data yet. The first check runs shortly after netward starts.</p>
   {{- else}}

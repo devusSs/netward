@@ -46,6 +46,7 @@ type card struct {
 	Enabled  bool
 	Taken    string
 	TakenAt  string
+	TakenISO string
 	Rows     []row
 }
 
@@ -67,6 +68,9 @@ type overview struct {
 	Truncated   bool
 	Limit       int
 	GeneratedAt string
+	// ServerTime lets the page's script correct for a browser clock that
+	// differs from the server's when it counts relative times up.
+	ServerTime string
 }
 
 func (s *Server) handleOverviewPage(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +151,7 @@ func (s *Server) overview(ctx context.Context, rangeParam string) (overview, err
 		Truncated:   len(events) == pageChangeLimit,
 		Limit:       pageChangeLimit,
 		GeneratedAt: now.In(s.location).Format("15:04:05"),
+		ServerTime:  now.UTC().Format(time.RFC3339Nano),
 	}, nil
 }
 
@@ -165,10 +170,11 @@ func rangeOptions(active string) []rangeOption {
 }
 
 func (s *Server) newCard(title string, enabled bool, taken time.Time, now time.Time) card {
-	c := card{Title: title, Subtitle: "", Enabled: enabled, Taken: "", TakenAt: "", Rows: nil}
+	c := card{Title: title, Subtitle: "", Enabled: enabled, Taken: "", TakenAt: "", TakenISO: "", Rows: nil}
 	if !taken.IsZero() {
 		c.Taken = ago(now.Sub(taken))
 		c.TakenAt = taken.In(s.location).Format(time.DateTime)
+		c.TakenISO = taken.UTC().Format(time.RFC3339Nano)
 	}
 
 	return c
@@ -321,6 +327,7 @@ func join(parts ...string) string {
 }
 
 // ago describes how long ago something happened, for example "12 s ago".
+// static/app.js formats relative times the same way in the browser.
 func ago(d time.Duration) string {
 	switch {
 	case d < time.Minute:
