@@ -8,6 +8,37 @@ import (
 	"database/sql"
 )
 
+type PrivateNetAddr struct {
+	SnapshotID []byte
+	Interface  string
+	Prefix     string
+}
+
+type PrivateNetGatewayProbe struct {
+	SnapshotID      []byte
+	Family          string
+	Status          string
+	Message         string
+	StartedAt       sql.NullInt64
+	DurationNs      int64
+	Addr            sql.NullString
+	PacketsSent     int64
+	PacketsReceived int64
+	RttMinNs        int64
+	RttMaxNs        int64
+	RttAvgNs        int64
+	JitterNs        int64
+}
+
+type PrivateNetSnapshot struct {
+	ID              []byte
+	TakenAt         int64
+	AddrsStatus     string
+	AddrsMessage    string
+	AddrsStartedAt  sql.NullInt64
+	AddrsDurationNs int64
+}
+
 type PublicNetConnProbe struct {
 	SnapshotID      []byte
 	Family          string
