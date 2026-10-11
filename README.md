@@ -33,6 +33,20 @@ You can also configure custom endpoints for:
 
 and limit the monitored network interfaces, for example to exclude Docker or VPN interfaces.
 
+### Web Interface
+
+netward serves a web interface at `https://<host>:8443` by default. It shows the current public, private and domain state and the recent changes, such as a new public IP address, a gateway that stopped answering or a domain that now points elsewhere. It refreshes itself every 30 seconds and loads nothing from other hosts.
+
+On first start netward creates a self-signed certificate for HTTPS, like Pi-hole does, so your browser will warn about it once. You can also point netward at your own certificate.
+
+The same data is available as JSON:
+
+- `GET /api/publicnet/latest`, `/api/privatenet/latest` and `/api/domainip/latest` return the latest check of each feature.
+- `GET /api/changes?since=24h&limit=100` returns the recent changes, newest first. `since` accepts durations such as `90m`, `24h` or `7d` (at most `31d`).
+- `GET /api/health` reports whether netward is running.
+
+Checks are kept for 30 days by default (`retention` in the configuration).
+
 ## Setup
 
 _Coming soon._
