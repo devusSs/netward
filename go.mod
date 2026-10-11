@@ -3,6 +3,7 @@ module github.com/devusSs/netward
 go 1.27.1
 
 require (
+	github.com/jackpal/gateway v1.2.0
 	github.com/pressly/goose/v3 v3.28.0
 	github.com/prometheus-community/pro-bing v0.9.1
 	modernc.org/sqlite v1.60.1
