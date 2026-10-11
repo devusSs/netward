@@ -15,3 +15,10 @@ go.work.sum
 .DS_STORE
 bin/
 dist/
+# netward's runtime files when run from the repository
+/netward
+netward.yaml
+netward.db
+netward.db-*
+netward-cert.pem
+netward-key.pem
