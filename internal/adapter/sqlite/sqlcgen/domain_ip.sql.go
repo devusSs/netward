@@ -8,7 +8,21 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
+
+const deleteDomainIPSnapshotsBefore = `-- name: DeleteDomainIPSnapshotsBefore :execrows
+DELETE FROM domain_ip_snapshots
+WHERE taken_at < ?
+`
+
+func (q *Queries) DeleteDomainIPSnapshotsBefore(ctx context.Context, takenAt int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteDomainIPSnapshotsBefore, takenAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
 
 const insertDomainIPAddr = `-- name: InsertDomainIPAddr :exec
 INSERT INTO domain_ip_addrs (snapshot_id, domain, addr)
@@ -66,4 +80,127 @@ type InsertDomainIPSnapshotParams struct {
 func (q *Queries) InsertDomainIPSnapshot(ctx context.Context, arg InsertDomainIPSnapshotParams) error {
 	_, err := q.db.ExecContext(ctx, insertDomainIPSnapshot, arg.ID, arg.TakenAt, arg.Resolver)
 	return err
+}
+
+const listDomainIPAddrs = `-- name: ListDomainIPAddrs :many
+SELECT snapshot_id, domain, addr
+FROM domain_ip_addrs
+WHERE snapshot_id IN (/*SLICE:snapshot_ids*/?)
+`
+
+func (q *Queries) ListDomainIPAddrs(ctx context.Context, snapshotIds [][]byte) ([]DomainIpAddr, error) {
+	query := listDomainIPAddrs
+	var queryParams []interface{}
+	if len(snapshotIds) > 0 {
+		for _, v := range snapshotIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", strings.Repeat(",?", len(snapshotIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DomainIpAddr
+	for rows.Next() {
+		var i DomainIpAddr
+		if err := rows.Scan(&i.SnapshotID, &i.Domain, &i.Addr); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDomainIPLookups = `-- name: ListDomainIPLookups :many
+SELECT snapshot_id, domain, status, message, started_at, duration_ns
+FROM domain_ip_lookups
+WHERE snapshot_id IN (/*SLICE:snapshot_ids*/?)
+ORDER BY snapshot_id, domain
+`
+
+func (q *Queries) ListDomainIPLookups(ctx context.Context, snapshotIds [][]byte) ([]DomainIpLookup, error) {
+	query := listDomainIPLookups
+	var queryParams []interface{}
+	if len(snapshotIds) > 0 {
+		for _, v := range snapshotIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", strings.Repeat(",?", len(snapshotIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DomainIpLookup
+	for rows.Next() {
+		var i DomainIpLookup
+		if err := rows.Scan(
+			&i.SnapshotID,
+			&i.Domain,
+			&i.Status,
+			&i.Message,
+			&i.StartedAt,
+			&i.DurationNs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDomainIPSnapshots = `-- name: ListDomainIPSnapshots :many
+SELECT id, taken_at, resolver
+FROM domain_ip_snapshots
+WHERE taken_at >= ?1 AND taken_at < ?2
+ORDER BY taken_at DESC, id DESC
+LIMIT ?3
+`
+
+type ListDomainIPSnapshotsParams struct {
+	FromMs  int64
+	ToMs    int64
+	MaxRows int64
+}
+
+func (q *Queries) ListDomainIPSnapshots(ctx context.Context, arg ListDomainIPSnapshotsParams) ([]DomainIpSnapshot, error) {
+	rows, err := q.db.QueryContext(ctx, listDomainIPSnapshots, arg.FromMs, arg.ToMs, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DomainIpSnapshot
+	for rows.Next() {
+		var i DomainIpSnapshot
+		if err := rows.Scan(&i.ID, &i.TakenAt, &i.Resolver); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

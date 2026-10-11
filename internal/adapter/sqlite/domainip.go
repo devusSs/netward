@@ -4,6 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/netip"
+	"slices"
+	"time"
+	"uuid"
 
 	"github.com/devusSs/netward/internal/adapter/sqlite/sqlcgen"
 	"github.com/devusSs/netward/internal/domain/domainip"
@@ -74,6 +78,142 @@ func saveLookup(ctx context.Context, queries *sqlcgen.Queries, id []byte, lookup
 			return fmt.Errorf("insert address %s: %w", addr, err)
 		}
 	}
+
+	return nil
+}
+
+// DomainIPSnapshots returns up to limit snapshots taken at or after from and
+// before to, newest first. Limit must be between 1 and [MaxSnapshots].
+func (s *Store) DomainIPSnapshots(
+	ctx context.Context,
+	from, to time.Time,
+	limit int,
+) ([]*domainip.Snapshot, error) {
+	params, err := newRangeParams(from, to, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	var snaps []*domainip.Snapshot
+
+	err = s.read(ctx, func(queries *sqlcgen.Queries) error {
+		snaps, err = readDomainIPSnapshots(ctx, queries, params)
+
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read domain ip snapshots: %w", err)
+	}
+
+	return snaps, nil
+}
+
+func readDomainIPSnapshots(
+	ctx context.Context,
+	queries *sqlcgen.Queries,
+	params rangeParams,
+) ([]*domainip.Snapshot, error) {
+	rows, err := queries.ListDomainIPSnapshots(ctx, sqlcgen.ListDomainIPSnapshotsParams{
+		FromMs:  params.fromMs,
+		ToMs:    params.toMs,
+		MaxRows: params.maxRows,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list snapshots: %w", err)
+	}
+
+	if len(rows) == 0 {
+		return nil, nil
+	}
+
+	snaps := make([]*domainip.Snapshot, 0, len(rows))
+	byID := make(map[uuid.UUID]*domainip.Snapshot, len(rows))
+	ids := make([][]byte, 0, len(rows))
+
+	for _, row := range rows {
+		id, idErr := parseID(row.ID)
+		if idErr != nil {
+			return nil, idErr
+		}
+
+		snap := new(domainip.Snapshot)
+		snap.ID = id
+		snap.Resolver = row.Resolver
+		snap.Timestamp = parseTime(row.TakenAt)
+
+		snaps = append(snaps, snap)
+		byID[id] = snap
+		ids = append(ids, row.ID)
+	}
+
+	// Lookups come sorted by domain, which is the order of a snapshot's
+	// lookups.
+	lookupRows, err := queries.ListDomainIPLookups(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list lookups: %w", err)
+	}
+
+	for _, row := range lookupRows {
+		err = assignLookup(byID, row)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	addrRows, err := queries.ListDomainIPAddrs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list addresses: %w", err)
+	}
+
+	for _, row := range addrRows {
+		err = assignLookupAddr(byID, row)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for _, snap := range snaps {
+		for i := range snap.Lookups {
+			slices.SortFunc(snap.Lookups[i].Addrs, netip.Addr.Compare)
+		}
+	}
+
+	return snaps, nil
+}
+
+func assignLookup(byID map[uuid.UUID]*domainip.Snapshot, row sqlcgen.DomainIpLookup) error {
+	snap, err := snapshotOf(byID, row.SnapshotID)
+	if err != nil {
+		return err
+	}
+
+	result, err := parseResult(row.Status, row.Message, row.StartedAt, row.DurationNs)
+	if err != nil {
+		return fmt.Errorf("snapshot %s: lookup of %s: %w", snap.ID, row.Domain, err)
+	}
+
+	snap.Lookups = append(snap.Lookups, domainip.LookupProbe{Result: result, Domain: row.Domain, Addrs: nil})
+
+	return nil
+}
+
+func assignLookupAddr(byID map[uuid.UUID]*domainip.Snapshot, row sqlcgen.DomainIpAddr) error {
+	snap, err := snapshotOf(byID, row.SnapshotID)
+	if err != nil {
+		return err
+	}
+
+	addr, err := netip.ParseAddr(row.Addr)
+	if err != nil {
+		return fmt.Errorf("snapshot %s: address of %s: %w", snap.ID, row.Domain, err)
+	}
+
+	i := slices.IndexFunc(snap.Lookups, func(l domainip.LookupProbe) bool { return l.Domain == row.Domain })
+	if i < 0 {
+		return fmt.Errorf("snapshot %s: address of unknown lookup %s", snap.ID, row.Domain)
+	}
+
+	snap.Lookups[i].Addrs = append(snap.Lookups[i].Addrs, addr)
 
 	return nil
 }

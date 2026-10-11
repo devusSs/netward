@@ -8,7 +8,21 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
+
+const deletePrivateNetSnapshotsBefore = `-- name: DeletePrivateNetSnapshotsBefore :execrows
+DELETE FROM private_net_snapshots
+WHERE taken_at < ?
+`
+
+func (q *Queries) DeletePrivateNetSnapshotsBefore(ctx context.Context, takenAt int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePrivateNetSnapshotsBefore, takenAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
 
 const insertPrivateNetAddr = `-- name: InsertPrivateNetAddr :exec
 INSERT INTO private_net_addrs (snapshot_id, interface, prefix)
@@ -93,4 +107,142 @@ func (q *Queries) InsertPrivateNetSnapshot(ctx context.Context, arg InsertPrivat
 		arg.AddrsDurationNs,
 	)
 	return err
+}
+
+const listPrivateNetAddrs = `-- name: ListPrivateNetAddrs :many
+SELECT snapshot_id, interface, prefix
+FROM private_net_addrs
+WHERE snapshot_id IN (/*SLICE:snapshot_ids*/?)
+ORDER BY snapshot_id, interface, prefix
+`
+
+func (q *Queries) ListPrivateNetAddrs(ctx context.Context, snapshotIds [][]byte) ([]PrivateNetAddr, error) {
+	query := listPrivateNetAddrs
+	var queryParams []interface{}
+	if len(snapshotIds) > 0 {
+		for _, v := range snapshotIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", strings.Repeat(",?", len(snapshotIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PrivateNetAddr
+	for rows.Next() {
+		var i PrivateNetAddr
+		if err := rows.Scan(&i.SnapshotID, &i.Interface, &i.Prefix); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPrivateNetGatewayProbes = `-- name: ListPrivateNetGatewayProbes :many
+SELECT snapshot_id, family, status, message, started_at, duration_ns, addr,
+       packets_sent, packets_received, rtt_min_ns, rtt_max_ns, rtt_avg_ns, jitter_ns
+FROM private_net_gateway_probes
+WHERE snapshot_id IN (/*SLICE:snapshot_ids*/?)
+`
+
+func (q *Queries) ListPrivateNetGatewayProbes(ctx context.Context, snapshotIds [][]byte) ([]PrivateNetGatewayProbe, error) {
+	query := listPrivateNetGatewayProbes
+	var queryParams []interface{}
+	if len(snapshotIds) > 0 {
+		for _, v := range snapshotIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", strings.Repeat(",?", len(snapshotIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PrivateNetGatewayProbe
+	for rows.Next() {
+		var i PrivateNetGatewayProbe
+		if err := rows.Scan(
+			&i.SnapshotID,
+			&i.Family,
+			&i.Status,
+			&i.Message,
+			&i.StartedAt,
+			&i.DurationNs,
+			&i.Addr,
+			&i.PacketsSent,
+			&i.PacketsReceived,
+			&i.RttMinNs,
+			&i.RttMaxNs,
+			&i.RttAvgNs,
+			&i.JitterNs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPrivateNetSnapshots = `-- name: ListPrivateNetSnapshots :many
+SELECT id, taken_at, addrs_status, addrs_message, addrs_started_at, addrs_duration_ns
+FROM private_net_snapshots
+WHERE taken_at >= ?1 AND taken_at < ?2
+ORDER BY taken_at DESC, id DESC
+LIMIT ?3
+`
+
+type ListPrivateNetSnapshotsParams struct {
+	FromMs  int64
+	ToMs    int64
+	MaxRows int64
+}
+
+func (q *Queries) ListPrivateNetSnapshots(ctx context.Context, arg ListPrivateNetSnapshotsParams) ([]PrivateNetSnapshot, error) {
+	rows, err := q.db.QueryContext(ctx, listPrivateNetSnapshots, arg.FromMs, arg.ToMs, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PrivateNetSnapshot
+	for rows.Next() {
+		var i PrivateNetSnapshot
+		if err := rows.Scan(
+			&i.ID,
+			&i.TakenAt,
+			&i.AddrsStatus,
+			&i.AddrsMessage,
+			&i.AddrsStartedAt,
+			&i.AddrsDurationNs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

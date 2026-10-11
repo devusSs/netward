@@ -8,7 +8,21 @@ package sqlcgen
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
+
+const deletePublicNetSnapshotsBefore = `-- name: DeletePublicNetSnapshotsBefore :execrows
+DELETE FROM public_net_snapshots
+WHERE taken_at < ?
+`
+
+func (q *Queries) DeletePublicNetSnapshotsBefore(ctx context.Context, takenAt int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deletePublicNetSnapshotsBefore, takenAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
 
 const insertPublicNetConnProbe = `-- name: InsertPublicNetConnProbe :exec
 INSERT INTO public_net_conn_probes (
@@ -98,4 +112,144 @@ type InsertPublicNetSnapshotParams struct {
 func (q *Queries) InsertPublicNetSnapshot(ctx context.Context, arg InsertPublicNetSnapshotParams) error {
 	_, err := q.db.ExecContext(ctx, insertPublicNetSnapshot, arg.ID, arg.TakenAt)
 	return err
+}
+
+const listPublicNetConnProbes = `-- name: ListPublicNetConnProbes :many
+SELECT snapshot_id, family, status, message, started_at, duration_ns, method, target,
+       packets_sent, packets_received, rtt_min_ns, rtt_max_ns, rtt_avg_ns, jitter_ns
+FROM public_net_conn_probes
+WHERE snapshot_id IN (/*SLICE:snapshot_ids*/?)
+`
+
+func (q *Queries) ListPublicNetConnProbes(ctx context.Context, snapshotIds [][]byte) ([]PublicNetConnProbe, error) {
+	query := listPublicNetConnProbes
+	var queryParams []interface{}
+	if len(snapshotIds) > 0 {
+		for _, v := range snapshotIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", strings.Repeat(",?", len(snapshotIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PublicNetConnProbe
+	for rows.Next() {
+		var i PublicNetConnProbe
+		if err := rows.Scan(
+			&i.SnapshotID,
+			&i.Family,
+			&i.Status,
+			&i.Message,
+			&i.StartedAt,
+			&i.DurationNs,
+			&i.Method,
+			&i.Target,
+			&i.PacketsSent,
+			&i.PacketsReceived,
+			&i.RttMinNs,
+			&i.RttMaxNs,
+			&i.RttAvgNs,
+			&i.JitterNs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicNetIPProbes = `-- name: ListPublicNetIPProbes :many
+SELECT snapshot_id, family, status, message, started_at, duration_ns, source, addr
+FROM public_net_ip_probes
+WHERE snapshot_id IN (/*SLICE:snapshot_ids*/?)
+`
+
+func (q *Queries) ListPublicNetIPProbes(ctx context.Context, snapshotIds [][]byte) ([]PublicNetIpProbe, error) {
+	query := listPublicNetIPProbes
+	var queryParams []interface{}
+	if len(snapshotIds) > 0 {
+		for _, v := range snapshotIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", strings.Repeat(",?", len(snapshotIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:snapshot_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PublicNetIpProbe
+	for rows.Next() {
+		var i PublicNetIpProbe
+		if err := rows.Scan(
+			&i.SnapshotID,
+			&i.Family,
+			&i.Status,
+			&i.Message,
+			&i.StartedAt,
+			&i.DurationNs,
+			&i.Source,
+			&i.Addr,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPublicNetSnapshots = `-- name: ListPublicNetSnapshots :many
+SELECT id, taken_at
+FROM public_net_snapshots
+WHERE taken_at >= ?1 AND taken_at < ?2
+ORDER BY taken_at DESC, id DESC
+LIMIT ?3
+`
+
+type ListPublicNetSnapshotsParams struct {
+	FromMs  int64
+	ToMs    int64
+	MaxRows int64
+}
+
+func (q *Queries) ListPublicNetSnapshots(ctx context.Context, arg ListPublicNetSnapshotsParams) ([]PublicNetSnapshot, error) {
+	rows, err := q.db.QueryContext(ctx, listPublicNetSnapshots, arg.FromMs, arg.ToMs, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PublicNetSnapshot
+	for rows.Next() {
+		var i PublicNetSnapshot
+		if err := rows.Scan(&i.ID, &i.TakenAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
