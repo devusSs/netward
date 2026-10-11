@@ -1,0 +1,148 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --text: #1d2321;
+  --muted: #5f6b67;
+  --border: #dde2df;
+  --accent: #2f6f5e;
+  --ok-bg: #dcf1e6;
+  --ok-fg: #1d6340;
+  --warn-bg: #fbecd2;
+  --warn-fg: #8a5300;
+  --fail-bg: #fbdcdc;
+  --fail-fg: #9b1c1c;
+  --off-bg: #e9ecea;
+  --off-fg: #5f6b67;
+  --radius: 10px;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121615;
+    --surface: #1b211f;
+    --text: #e5ebe8;
+    --muted: #94a19c;
+    --border: #2c3532;
+    --accent: #6fc2a8;
+    --ok-bg: #173a2a;
+    --ok-fg: #8fe0b5;
+    --warn-bg: #3d2e12;
+    --warn-fg: #f2c46d;
+    --fail-bg: #431c1c;
+    --fail-fg: #f4a3a3;
+    --off-bg: #262d2b;
+    --off-fg: #94a19c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0 auto;
+  max-width: 1200px;
+  padding: 24px 16px 40px;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+a { color: var(--accent); }
+
+header.site { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+header.site h1 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 1.5rem; }
+header.site p { margin: 0; color: var(--muted); }
+
+.mark {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 4px solid var(--accent);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.card, .changes {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  min-width: 0;
+}
+
+.card header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+
+h2 { margin: 0 0 10px; font-size: 1.05rem; }
+
+.subtitle, .taken, .note, .empty, .updated, footer.site { color: var(--muted); font-size: 0.85rem; }
+.subtitle { margin: 0; font-family: var(--mono); }
+.taken { margin: 10px 0 0; }
+.empty { margin: 4px 0; }
+
+table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+td:nth-child(2) { width: 6.5em; }
+th, td { padding: 7px 0; border-top: 1px solid var(--border); vertical-align: top; text-align: left; }
+tbody tr:first-child th, tbody tr:first-child td { border-top: 0; }
+th { width: 32%; font-weight: 500; padding-right: 10px; overflow-wrap: anywhere; }
+td:nth-child(2) { padding-right: 10px; }
+
+.value { overflow-wrap: anywhere; }
+.value span { display: block; font-family: var(--mono); font-size: 0.9rem; }
+.value small { display: block; color: var(--muted); }
+.value small.message, .change .message { color: var(--fail-fg); }
+
+.status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.status-ok { background: var(--ok-bg); color: var(--ok-fg); }
+.status-unavailable { background: var(--warn-bg); color: var(--warn-fg); }
+.status-failed { background: var(--fail-bg); color: var(--fail-fg); }
+.status-disabled, .status-unknown { background: var(--off-bg); color: var(--off-fg); }
+
+.changes-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.changes-head h2 { margin: 0; }
+
+.ranges { display: flex; flex-wrap: wrap; gap: 4px; }
+.ranges a {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.ranges a.active { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+
+.change-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.change {
+  display: grid;
+  grid-template-columns: 7.5em 5em minmax(8em, 12em) 1fr;
+  gap: 4px 12px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+}
+.change time { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); }
+.change .source { color: var(--muted); }
+.change .subject { font-weight: 500; overflow-wrap: anywhere; }
+.change .text { font-family: var(--mono); font-size: 0.9rem; overflow-wrap: anywhere; }
+.change .message { grid-column: 3 / -1; font-size: 0.85rem; }
+
+@media (max-width: 640px) {
+  .change { grid-template-columns: 5.5em 1fr; }
+  .change .source { display: none; }
+  .change .text, .change .message { grid-column: 2 / -1; }
+}
+
+.updated { text-align: right; margin: 8px 0 0; }
+footer.site { margin-top: 24px; text-align: center; }

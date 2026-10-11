@@ -1,0 +1,24 @@
+{{define "page" -}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "allowEval": false, "allowScriptTags": false}'>
+  <title>netward</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+  <header class="site">
+    <h1><span class="mark" aria-hidden="true"></span>netward</h1>
+    <p>network warden</p>
+  </header>
+  {{template "overview" .}}
+  <footer class="site">
+    <p>Refreshes every 30 seconds · <a href="/api/changes">API</a></p>
+  </footer>
+</body>
+</html>
+{{- end}}

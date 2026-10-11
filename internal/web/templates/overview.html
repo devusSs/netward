@@ -1,0 +1,73 @@
+{{define "overview" -}}
+<main id="overview" hx-get="/fragments/overview?range={{.Range}}" hx-trigger="every 30s" hx-swap="outerHTML">
+  <section class="cards" aria-label="Current state">
+    {{- range .Cards}}{{template "card" .}}{{end}}
+  </section>
+
+  <section class="changes" aria-labelledby="changes-title">
+    <div class="changes-head">
+      <h2 id="changes-title">Recent changes</h2>
+      <nav class="ranges" aria-label="Time range">
+        {{- range .Ranges}}
+        <a href="/?range={{.Value}}" hx-get="/fragments/overview?range={{.Value}}" hx-target="#overview"
+           hx-swap="outerHTML" hx-push-url="/?range={{.Value}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a>
+        {{- end}}
+      </nav>
+    </div>
+    {{- if .Changes}}
+    <ol class="change-list">
+      {{- range .Changes}}
+      <li class="change change-{{.Kind}}">
+        <time datetime="{{.DateTime}}">{{.Time}}</time>
+        <span class="source">{{.Source}}</span>
+        <span class="subject">{{.Subject}}</span>
+        <span class="text">{{.Text}}</span>
+        {{- if .Message}}<span class="message">{{.Message}}</span>{{end}}
+      </li>
+      {{- end}}
+    </ol>
+    {{- if .Truncated}}
+    <p class="note">Showing the newest {{.Limit}} changes.</p>
+    {{- end}}
+    {{- else}}
+    <p class="empty">No changes in this period.</p>
+    {{- end}}
+  </section>
+
+  <p class="updated">Updated at {{.GeneratedAt}}</p>
+</main>
+{{- end}}
+
+{{define "card" -}}
+<article class="card">
+  <header>
+    <h2>{{.Title}}</h2>
+    {{- if .Subtitle}}<p class="subtitle">{{.Subtitle}}</p>{{end}}
+  </header>
+  {{- if .Rows}}
+  {{- if not .Enabled}}
+  <p class="note">Disabled in the configuration. Showing the last check.</p>
+  {{- end}}
+  <table>
+    <tbody>
+      {{- range .Rows}}
+      <tr>
+        <th scope="row">{{.Label}}</th>
+        <td><span class="status status-{{.Status}}">{{.Status}}</span></td>
+        <td class="value">
+          {{- range .Values}}<span>{{.}}</span>{{end}}
+          {{- if .Detail}}<small>{{.Detail}}</small>{{end}}
+          {{- if .Message}}<small class="message">{{.Message}}</small>{{end}}
+        </td>
+      </tr>
+      {{- end}}
+    </tbody>
+  </table>
+  <p class="taken" title="{{.TakenAt}}">Checked {{.Taken}}</p>
+  {{- else if .Enabled}}
+  <p class="empty">No data yet. The first check runs shortly after netward starts.</p>
+  {{- else}}
+  <p class="empty">Disabled in the configuration.</p>
+  {{- end}}
+</article>
+{{- end}}
