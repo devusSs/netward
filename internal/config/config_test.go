@@ -59,6 +59,7 @@ func TestParseOverrides(t *testing.T) {
 
 	cfg, err := config.Parse([]byte(`
 database: /var/lib/netward/netward.db
+retention: 168h
 log:
   level: DEBUG
   format: json
@@ -94,6 +95,7 @@ http:
 
 	want := config.Default()
 	want.Database = "/var/lib/netward/netward.db"
+	want.Retention = 7 * 24 * time.Hour
 	want.Log = config.Log{Level: slog.LevelDebug, Format: config.LogFormatJSON}
 	want.Ping.Count = 3
 	want.Ping.Interval = 200 * time.Millisecond
@@ -152,6 +154,8 @@ func TestValidate(t *testing.T) {
 		wantMsg string
 	}{
 		{"empty database", func(c *config.Config) { c.Database = "" }, "database: must not be empty"},
+		{"negative retention", func(c *config.Config) { c.Retention = -time.Hour },
+			"retention: must not be negative, got -1h0m0s"},
 		{"bad log format", func(c *config.Config) { c.Log.Format = "xml" },
 			`log.format: must be text or json, got "xml"`},
 		{"everything disabled", func(c *config.Config) {
@@ -237,6 +241,7 @@ func TestValidateAcceptsOptionalValues(t *testing.T) {
 		{"ip and name tls hosts", func(c *config.Config) {
 			c.HTTP.TLS.Hosts = []string{"netward.home", "192.168.178.26", "fd00::26"}
 		}},
+		{"keep snapshots forever", func(c *config.Config) { c.Retention = 0 }},
 		{"web interface off", func(c *config.Config) {
 			c.HTTP.Enabled = false
 		}},

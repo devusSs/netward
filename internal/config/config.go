@@ -40,6 +40,8 @@ const (
 type Config struct {
 	// Database is the path of the SQLite database file.
 	Database string `yaml:"database"`
+	// Retention is how long snapshots are kept. Zero keeps them forever.
+	Retention time.Duration `yaml:"retention"`
 	// Log configures logging.
 	Log Log `yaml:"log"`
 	// Ping configures the echo requests of the public connectivity and the
@@ -179,10 +181,12 @@ func Default() Config {
 		defaultDomainInterval = 5 * time.Minute
 		defaultTimeout        = 5 * time.Second
 		defaultPingCount      = 4
+		defaultRetention      = 30 * 24 * time.Hour
 	)
 
 	return Config{
-		Database: "netward.db",
+		Database:  "netward.db",
+		Retention: defaultRetention,
 		Log: Log{
 			Level:  slog.LevelInfo,
 			Format: LogFormatText,
@@ -287,6 +291,7 @@ func (c Config) Validate() error {
 	}
 
 	check(c.Database != "", "database", "must not be empty")
+	check(c.Retention >= 0, "retention", "must not be negative, got %s", c.Retention)
 	check(c.Log.Format == LogFormatText || c.Log.Format == LogFormatJSON,
 		"log.format", "must be text or json, got %q", c.Log.Format)
 	check(c.PublicNet.Enabled || c.PrivateNet.Enabled || c.DomainIP.Enabled,

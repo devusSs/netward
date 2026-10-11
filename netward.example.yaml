@@ -6,6 +6,9 @@
 # Path of the SQLite database file.
 database: netward.db
 
+# How long snapshots are kept. 720h are 30 days; 0 keeps them forever.
+retention: 720h
+
 log:
   # Minimum level logged: debug, info, warn or error.
   level: info
