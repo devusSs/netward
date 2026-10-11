@@ -378,3 +378,32 @@ func TestNewSnapshotJoinsErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestConnMethodText(t *testing.T) {
+	t.Parallel()
+
+	for method := publicnet.MethodUnknown; method <= publicnet.MethodHTTP; method++ {
+		text, err := method.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText(%s) error = %v", method, err)
+		}
+
+		var parsed publicnet.ConnMethod
+		if err = parsed.UnmarshalText(text); err != nil || parsed != method {
+			t.Errorf("UnmarshalText(%q) = %s, %v, want %s", text, parsed, err, method)
+		}
+	}
+
+	if _, err := publicnet.ConnMethod(42).MarshalText(); err == nil {
+		t.Error("MarshalText(ConnMethod(42)) error = nil, want an error")
+	}
+
+	method := publicnet.MethodTCP
+	if err := method.UnmarshalText([]byte("udp")); err == nil || method != publicnet.MethodTCP {
+		t.Errorf("UnmarshalText(udp) = %s, %v, want an error and no change", method, err)
+	}
+
+	if _, err := publicnet.ParseConnMethod("ICMP"); err == nil {
+		t.Error(`ParseConnMethod("ICMP") error = nil, want an error`)
+	}
+}

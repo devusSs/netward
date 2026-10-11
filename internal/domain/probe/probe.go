@@ -51,6 +51,39 @@ func (s Status) IsValid() bool {
 	return s >= StatusOK && s <= StatusDisabled
 }
 
+// ParseStatus returns the status whose [Status.String] is s.
+func ParseStatus(s string) (Status, error) {
+	for status := StatusUnknown; status <= StatusDisabled; status++ {
+		if status.String() == s {
+			return status, nil
+		}
+	}
+
+	return StatusUnknown, fmt.Errorf("unknown status %q", s)
+}
+
+// MarshalText returns the status's name, so it appears as "ok" or "failed"
+// in JSON.
+func (s Status) MarshalText() ([]byte, error) {
+	if s > StatusDisabled {
+		return nil, fmt.Errorf("invalid status %d", uint8(s))
+	}
+
+	return []byte(s.String()), nil
+}
+
+// UnmarshalText parses a status name with [ParseStatus].
+func (s *Status) UnmarshalText(text []byte) error {
+	status, err := ParseStatus(string(text))
+	if err != nil {
+		return err
+	}
+
+	*s = status
+
+	return nil
+}
+
 // Result holds the outcome and timing that every probe has in common.
 type Result struct {
 	// Status is the outcome of the probe.

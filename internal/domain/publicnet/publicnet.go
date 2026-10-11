@@ -55,6 +55,38 @@ func (m ConnMethod) IsValid() bool {
 	return m >= MethodICMP && m <= MethodHTTP
 }
 
+// ParseConnMethod returns the method whose [ConnMethod.String] is s.
+func ParseConnMethod(s string) (ConnMethod, error) {
+	for method := MethodUnknown; method <= MethodHTTP; method++ {
+		if method.String() == s {
+			return method, nil
+		}
+	}
+
+	return MethodUnknown, fmt.Errorf("unknown connection method %q", s)
+}
+
+// MarshalText returns the method's name, so it appears as "icmp" in JSON.
+func (m ConnMethod) MarshalText() ([]byte, error) {
+	if m > MethodHTTP {
+		return nil, fmt.Errorf("invalid connection method %d", uint8(m))
+	}
+
+	return []byte(m.String()), nil
+}
+
+// UnmarshalText parses a method name with [ParseConnMethod].
+func (m *ConnMethod) UnmarshalText(text []byte) error {
+	method, err := ParseConnMethod(string(text))
+	if err != nil {
+		return err
+	}
+
+	*m = method
+
+	return nil
+}
+
 // IPAddrProbe is the result of looking up the host's public IP address of one
 // family.
 type IPAddrProbe struct {

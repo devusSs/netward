@@ -184,3 +184,41 @@ func TestPingStatsValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestStatusText(t *testing.T) {
+	t.Parallel()
+
+	for status := probe.StatusUnknown; status <= probe.StatusDisabled; status++ {
+		text, err := status.MarshalText()
+		if err != nil {
+			t.Fatalf("MarshalText(%s) error = %v", status, err)
+		}
+
+		parsed, err := probe.ParseStatus(string(text))
+		if err != nil || parsed != status {
+			t.Errorf("ParseStatus(%q) = %s, %v, want %s", text, parsed, err, status)
+		}
+
+		var unmarshaled probe.Status
+		if err = unmarshaled.UnmarshalText(text); err != nil || unmarshaled != status {
+			t.Errorf("UnmarshalText(%q) = %s, %v, want %s", text, unmarshaled, err, status)
+		}
+	}
+}
+
+func TestStatusTextErrors(t *testing.T) {
+	t.Parallel()
+
+	if _, err := probe.Status(42).MarshalText(); err == nil {
+		t.Error("MarshalText(Status(42)) error = nil, want an error")
+	}
+
+	if _, err := probe.ParseStatus("OK"); err == nil || err.Error() != `unknown status "OK"` {
+		t.Errorf(`ParseStatus("OK") error = %v, want unknown status`, err)
+	}
+
+	status := probe.StatusFailed
+	if err := status.UnmarshalText([]byte("broken")); err == nil || status != probe.StatusFailed {
+		t.Errorf("UnmarshalText(broken) = %s, %v, want an error and no change", status, err)
+	}
+}
