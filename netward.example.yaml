@@ -1,0 +1,85 @@
+# netward example configuration.
+#
+# Every value below is the default, so you only need to keep the settings you
+# want to change. Durations use Go syntax, for example 30s, 1m or 1h30m.
+
+# Path of the SQLite database file.
+database: netward.db
+
+log:
+  # Minimum level logged: debug, info, warn or error.
+  level: info
+  # text or json.
+  format: text
+
+# Echo requests used by the public connectivity and the gateway checks.
+ping:
+  # Echo requests per check.
+  count: 4
+  # Wait between echo requests.
+  interval: 1s
+  # Limit for a whole check. Must leave room for all requests:
+  # interval * (count - 1) < timeout.
+  timeout: 5s
+  # Use raw ICMP sockets (needs root or CAP_NET_RAW). By default netward uses
+  # unprivileged pings, which on Linux need the net.ipv4.ping_group_range
+  # sysctl to include netward's group.
+  privileged: false
+
+# Public IPv4/IPv6 addresses and internet connectivity.
+publicnet:
+  enabled: true
+  interval: 1m
+  lookup:
+    timeout: 5s
+    # Endpoints that answer with the caller's address as plain text.
+    # An empty string ("") turns the lookup of that family off.
+    ipv4_endpoint: https://api.ipify.org
+    ipv6_endpoint: https://api6.ipify.org
+  # Servers pinged to check connectivity. "" turns the check of that family off.
+  targets:
+    ipv4: 1.1.1.1
+    ipv6: 2606:4700:4700::1111
+
+# Private interface addresses and default gateways.
+privatenet:
+  enabled: true
+  interval: 1m
+  # Find and ping the default IPv4 and IPv6 gateways.
+  gateways: true
+  # Glob patterns selecting the monitored interfaces. By default all
+  # interfaces that are up and not loopback are monitored.
+  interfaces:
+    # include: ["en*", "eth*", "wlan*"]
+    # exclude: ["docker*", "veth*", "br-*", "utun*"]
+
+# Resolve domains and record the addresses they point to, for example to check
+# that a dynamic DNS name follows your public IP address.
+domainip:
+  enabled: false
+  interval: 5m
+  # DNS server to query, for example 1.1.1.1 or 192.168.178.1:53.
+  # Empty uses the system resolver.
+  resolver: ""
+  timeout: 5s
+  # Required when enabled.
+  # domains:
+  #   - home.example.com
+
+# Web interface and API.
+http:
+  enabled: true
+  # Address to listen on, for example :8443 or 192.168.178.26:443. Ports below
+  # 1024 need root or CAP_NET_BIND_SERVICE.
+  address: :8443
+  tls:
+    # Serve HTTPS. Turn off only behind a reverse proxy that handles TLS.
+    enabled: true
+    # PEM certificate and key. If both files are missing, netward creates a
+    # self-signed certificate there on first start and reuses it afterwards.
+    # Point them at your own files to use a certificate from your own CA.
+    cert: netward-cert.pem
+    key: netward-key.pem
+    # Extra names or addresses for the self-signed certificate. The host name,
+    # localhost and the host's IP addresses are always included.
+    # hosts: ["netward.home"]
