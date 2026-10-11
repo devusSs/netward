@@ -15,6 +15,7 @@ import (
 
 	"github.com/devusSs/netward/internal/adapter/iplookup"
 	"github.com/devusSs/netward/internal/adapter/ping"
+	"github.com/devusSs/netward/internal/domain/probe"
 	domain "github.com/devusSs/netward/internal/domain/publicnet"
 	"github.com/devusSs/netward/internal/service/publicnet"
 )
@@ -293,7 +294,7 @@ func TestNewAcceptsIPv4MappedIPv4Target(t *testing.T) {
 
 	snap := f.takeSnapshot(t)
 
-	if snap.ConnIPv4.Target != targetIPv4 || snap.ConnIPv4.Status != domain.StatusOK {
+	if snap.ConnIPv4.Target != targetIPv4 || snap.ConnIPv4.Status != probe.StatusOK {
 		t.Errorf("ConnIPv4 = %+v, want ok probe of %s", snap.ConnIPv4, targetIPv4)
 	}
 }
@@ -338,7 +339,7 @@ func TestTakeSnapshot(t *testing.T) {
 	}
 
 	for _, tt := range ipTests {
-		if tt.probe.Status != domain.StatusOK || tt.probe.Message != "" {
+		if tt.probe.Status != probe.StatusOK || tt.probe.Message != "" {
 			t.Errorf("%s: status = %s (%q), want ok", tt.name, tt.probe.Status, tt.probe.Message)
 		}
 
@@ -359,7 +360,7 @@ func TestTakeSnapshot(t *testing.T) {
 		}
 	}
 
-	wantPing := domain.PingStats{
+	wantPing := probe.PingStats{
 		PacketsSent:     4,
 		PacketsReceived: 4,
 		RoundTripMin:    10 * time.Millisecond,
@@ -406,7 +407,7 @@ func TestTakeSnapshotMapsProbeOutcomes(t *testing.T) {
 			},
 			check: func(t *testing.T, snap *domain.Snapshot) {
 				t.Helper()
-				wantIPProbe(t, snap.IPv6, domain.StatusUnavailable, unavailable.Error())
+				wantIPProbe(t, snap.IPv6, probe.StatusUnavailable, unavailable.Error())
 			},
 			wantLevel: "DEBUG",
 			wantLog:   "probe unavailable",
@@ -421,7 +422,7 @@ func TestTakeSnapshotMapsProbeOutcomes(t *testing.T) {
 			},
 			check: func(t *testing.T, snap *domain.Snapshot) {
 				t.Helper()
-				wantIPProbe(t, snap.IPv4, domain.StatusFailed, "boom")
+				wantIPProbe(t, snap.IPv4, probe.StatusFailed, "boom")
 			},
 			wantLevel: "WARN",
 			wantLog:   "probe failed",
@@ -436,7 +437,7 @@ func TestTakeSnapshotMapsProbeOutcomes(t *testing.T) {
 			},
 			check: func(t *testing.T, snap *domain.Snapshot) {
 				t.Helper()
-				wantIPProbe(t, snap.IPv4, domain.StatusFailed, "boom")
+				wantIPProbe(t, snap.IPv4, probe.StatusFailed, "boom")
 			},
 			wantLevel: "WARN",
 			wantLog:   "probe failed",
@@ -451,7 +452,7 @@ func TestTakeSnapshotMapsProbeOutcomes(t *testing.T) {
 			},
 			check: func(t *testing.T, snap *domain.Snapshot) {
 				t.Helper()
-				wantConnProbe(t, snap.ConnIPv6, domain.StatusUnavailable, "target unreachable: no route")
+				wantConnProbe(t, snap.ConnIPv6, probe.StatusUnavailable, "target unreachable: no route")
 			},
 			wantLevel: "DEBUG",
 			wantLog:   "probe unavailable",
@@ -466,7 +467,7 @@ func TestTakeSnapshotMapsProbeOutcomes(t *testing.T) {
 			},
 			check: func(t *testing.T, snap *domain.Snapshot) {
 				t.Helper()
-				wantConnProbe(t, snap.ConnIPv4, domain.StatusFailed, "no reply from 1.1.1.1 to 4 packets")
+				wantConnProbe(t, snap.ConnIPv4, probe.StatusFailed, "no reply from 1.1.1.1 to 4 packets")
 
 				if snap.ConnIPv4.Ping.PacketsLost() != 4 {
 					t.Errorf("PacketsLost() = %d, want 4", snap.ConnIPv4.Ping.PacketsLost())
@@ -485,7 +486,7 @@ func TestTakeSnapshotMapsProbeOutcomes(t *testing.T) {
 			},
 			check: func(t *testing.T, snap *domain.Snapshot) {
 				t.Helper()
-				wantConnProbe(t, snap.ConnIPv4, domain.StatusFailed, "icmp not permitted: socket")
+				wantConnProbe(t, snap.ConnIPv4, probe.StatusFailed, "icmp not permitted: socket")
 			},
 			wantLevel: "WARN",
 			wantLog: "icmp is not permitted for this process; " +
@@ -509,7 +510,7 @@ func TestTakeSnapshotMapsProbeOutcomes(t *testing.T) {
 	}
 }
 
-func wantIPProbe(t *testing.T, probe domain.IPAddrProbe, status domain.ProbeStatus, msg string) {
+func wantIPProbe(t *testing.T, probe domain.IPAddrProbe, status probe.Status, msg string) {
 	t.Helper()
 
 	if probe.Status != status || probe.Message != msg || probe.Addr.IsValid() {
@@ -517,7 +518,7 @@ func wantIPProbe(t *testing.T, probe domain.IPAddrProbe, status domain.ProbeStat
 	}
 }
 
-func wantConnProbe(t *testing.T, probe domain.ConnProbe, status domain.ProbeStatus, msg string) {
+func wantConnProbe(t *testing.T, probe domain.ConnProbe, status probe.Status, msg string) {
 	t.Helper()
 
 	if probe.Status != status || probe.Message != msg || probe.Connected() {
@@ -562,7 +563,7 @@ func TestTakeSnapshotDisabledProbes(t *testing.T) {
 			tt.modify(&f.cfg)
 
 			snap := f.takeSnapshot(t)
-			statuses := map[string]domain.ProbeStatus{
+			statuses := map[string]probe.Status{
 				"ipv4":      snap.IPv4.Status,
 				"ipv6":      snap.IPv6.Status,
 				"conn_ipv4": snap.ConnIPv4.Status,
@@ -576,7 +577,7 @@ func TestTakeSnapshotDisabledProbes(t *testing.T) {
 					disabled = disabled || name == want
 				}
 
-				if disabled != (status == domain.StatusDisabled) {
+				if disabled != (status == probe.StatusDisabled) {
 					t.Errorf("%s status = %s, want disabled %t", name, status, disabled)
 				}
 			}

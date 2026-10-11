@@ -8,21 +8,22 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/devusSs/netward/internal/domain/probe"
 	"github.com/devusSs/netward/internal/domain/publicnet"
 )
 
 var testTime = time.Date(2026, time.October, 11, 12, 0, 0, 0, time.UTC) //nolint:gochecknoglobals // Read-only fixture.
 
-func okResult() publicnet.ProbeResult {
-	return publicnet.ProbeResult{
-		Status:    publicnet.StatusOK,
+func okResult() probe.Result {
+	return probe.Result{
+		Status:    probe.StatusOK,
 		Message:   "",
 		StartedAt: testTime,
 		Duration:  50 * time.Millisecond,
 	}
 }
 
-func statusResult(status publicnet.ProbeStatus, msg string) publicnet.ProbeResult {
+func statusResult(status probe.Status, msg string) probe.Result {
 	result := okResult()
 	result.Status = status
 	result.Message = msg
@@ -32,18 +33,18 @@ func statusResult(status publicnet.ProbeStatus, msg string) publicnet.ProbeResul
 
 func ipProbe(addr string) publicnet.IPAddrProbe {
 	return publicnet.IPAddrProbe{
-		ProbeResult: okResult(),
-		Source:      "https://api.ipify.org",
-		Addr:        netip.MustParseAddr(addr),
+		Result: okResult(),
+		Source: "https://api.ipify.org",
+		Addr:   netip.MustParseAddr(addr),
 	}
 }
 
 func connProbe(target string) publicnet.ConnProbe {
 	return publicnet.ConnProbe{
-		ProbeResult: okResult(),
-		Method:      publicnet.MethodICMP,
-		Target:      netip.MustParseAddr(target),
-		Ping: publicnet.PingStats{
+		Result: okResult(),
+		Method: publicnet.MethodICMP,
+		Target: netip.MustParseAddr(target),
+		Ping: probe.PingStats{
 			PacketsSent:     4,
 			PacketsReceived: 4,
 			RoundTripMin:    10 * time.Millisecond,
@@ -76,37 +77,6 @@ func (in snapshotInput) newSnapshot() (*publicnet.Snapshot, error) {
 	return publicnet.NewSnapshot(in.timestamp, in.ipv4, in.ipv6, in.connIPv4, in.connIPv6)
 }
 
-func TestProbeStatus(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		status    publicnet.ProbeStatus
-		wantStr   string
-		wantValid bool
-	}{
-		{publicnet.StatusUnknown, "unknown", false},
-		{publicnet.StatusOK, "ok", true},
-		{publicnet.StatusUnavailable, "unavailable", true},
-		{publicnet.StatusFailed, "failed", true},
-		{publicnet.StatusDisabled, "disabled", true},
-		{publicnet.ProbeStatus(42), "ProbeStatus(42)", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.wantStr, func(t *testing.T) {
-			t.Parallel()
-
-			if got := tt.status.String(); got != tt.wantStr {
-				t.Errorf("String() = %q, want %q", got, tt.wantStr)
-			}
-
-			if got := tt.status.IsValid(); got != tt.wantValid {
-				t.Errorf("IsValid() = %t, want %t", got, tt.wantValid)
-			}
-		})
-	}
-}
-
 func TestConnMethod(t *testing.T) {
 	t.Parallel()
 
@@ -137,29 +107,17 @@ func TestConnMethod(t *testing.T) {
 	}
 }
 
-func TestPingStatsPacketsLost(t *testing.T) {
-	t.Parallel()
-
-	stats := connProbe("1.1.1.1").Ping
-	stats.PacketsSent = 10
-	stats.PacketsReceived = 7
-
-	if got := stats.PacketsLost(); got != 3 {
-		t.Errorf("PacketsLost() = %d, want 3", got)
-	}
-}
-
 func TestConnProbeConnected(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		status publicnet.ProbeStatus
+		status probe.Status
 		want   bool
 	}{
-		{publicnet.StatusOK, true},
-		{publicnet.StatusUnavailable, false},
-		{publicnet.StatusFailed, false},
-		{publicnet.StatusDisabled, false},
+		{probe.StatusOK, true},
+		{probe.StatusUnavailable, false},
+		{probe.StatusFailed, false},
+		{probe.StatusDisabled, false},
 	}
 
 	for _, tt := range tests {
@@ -253,28 +211,28 @@ func TestNewSnapshotAcceptsNonOKProbes(t *testing.T) {
 		{
 			name: "ipv6 unavailable",
 			modify: func(in *snapshotInput) {
-				in.ipv6.ProbeResult = statusResult(publicnet.StatusUnavailable, "no route to host")
+				in.ipv6.Result = statusResult(probe.StatusUnavailable, "no route to host")
 				in.ipv6.Addr = netip.Addr{}
 			},
 		},
 		{
 			name: "ipv4 failed",
 			modify: func(in *snapshotInput) {
-				in.ipv4.ProbeResult = statusResult(publicnet.StatusFailed, "unexpected status 503")
+				in.ipv4.Result = statusResult(probe.StatusFailed, "unexpected status 503")
 				in.ipv4.Addr = netip.Addr{}
 			},
 		},
 		{
 			name: "conn failed with full packet loss",
 			modify: func(in *snapshotInput) {
-				in.connIPv4.ProbeResult = statusResult(publicnet.StatusFailed, "100% packet loss")
+				in.connIPv4.Result = statusResult(probe.StatusFailed, "100% packet loss")
 				in.connIPv4.Ping.PacketsReceived = 0
 			},
 		},
 		{
 			name: "conn disabled skips validation",
 			modify: func(in *snapshotInput) {
-				in.connIPv6.ProbeResult = statusResult(publicnet.StatusDisabled, "")
+				in.connIPv6.Result = statusResult(probe.StatusDisabled, "")
 				in.connIPv6.Method = publicnet.MethodUnknown
 				in.connIPv6.Target = netip.Addr{}
 				in.connIPv6.Ping.PacketsSent = -1
@@ -311,13 +269,13 @@ func TestNewSnapshotRejectsInvalidInput(t *testing.T) {
 		},
 		{
 			name:    "unknown status",
-			modify:  func(in *snapshotInput) { in.ipv4.Status = publicnet.StatusUnknown },
+			modify:  func(in *snapshotInput) { in.ipv4.Status = probe.StatusUnknown },
 			wantMsg: "ipv4: invalid status unknown",
 		},
 		{
 			name:    "out of range status",
-			modify:  func(in *snapshotInput) { in.connIPv6.Status = publicnet.ProbeStatus(42) },
-			wantMsg: "conn ipv6: invalid status ProbeStatus(42)",
+			modify:  func(in *snapshotInput) { in.connIPv6.Status = probe.Status(42) },
+			wantMsg: "conn ipv6: invalid status Status(42)",
 		},
 		{
 			name:    "ipv6 address in ipv4 probe",
@@ -336,7 +294,7 @@ func TestNewSnapshotRejectsInvalidInput(t *testing.T) {
 		},
 		{
 			name:    "address on failed probe",
-			modify:  func(in *snapshotInput) { in.ipv6.Status = publicnet.StatusFailed },
+			modify:  func(in *snapshotInput) { in.ipv6.Status = probe.StatusFailed },
 			wantMsg: "ipv6: address 2001:db8::7 set on probe with status failed",
 		},
 		{
@@ -352,7 +310,7 @@ func TestNewSnapshotRejectsInvalidInput(t *testing.T) {
 		{
 			name: "missing target on failed probe",
 			modify: func(in *snapshotInput) {
-				in.connIPv4.Status = publicnet.StatusFailed
+				in.connIPv4.Status = probe.StatusFailed
 				in.connIPv4.Target = netip.Addr{}
 			},
 			wantMsg: "conn ipv4: missing target",
@@ -406,7 +364,7 @@ func TestNewSnapshotJoinsErrors(t *testing.T) {
 	t.Parallel()
 
 	in := validInput()
-	in.ipv4.Status = publicnet.StatusUnknown
+	in.ipv4.Status = probe.StatusUnknown
 	in.connIPv6.Method = publicnet.MethodUnknown
 
 	_, err := in.newSnapshot()

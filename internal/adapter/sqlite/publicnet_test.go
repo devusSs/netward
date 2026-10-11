@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/devusSs/netward/internal/adapter/sqlite"
+	"github.com/devusSs/netward/internal/domain/probe"
 	"github.com/devusSs/netward/internal/domain/publicnet"
 )
 
@@ -16,18 +17,18 @@ func snapshotTime() time.Time {
 	return time.Date(2026, time.October, 11, 12, 0, 0, 123_000_000, time.UTC)
 }
 
-func okProbeResult(offset time.Duration) publicnet.ProbeResult {
-	return publicnet.ProbeResult{
-		Status:    publicnet.StatusOK,
+func okProbeResult(offset time.Duration) probe.Result {
+	return probe.Result{
+		Status:    probe.StatusOK,
 		Message:   "",
 		StartedAt: snapshotTime().Add(offset),
 		Duration:  150 * time.Millisecond,
 	}
 }
 
-func disabledProbeResult() publicnet.ProbeResult {
-	return publicnet.ProbeResult{
-		Status:    publicnet.StatusDisabled,
+func disabledProbeResult() probe.Result {
+	return probe.Result{
+		Status:    probe.StatusDisabled,
 		Message:   "",
 		StartedAt: time.Time{},
 		Duration:  0,
@@ -40,12 +41,12 @@ func newSnapshot(t *testing.T) *publicnet.Snapshot {
 	snap, err := publicnet.NewSnapshot(
 		snapshotTime(),
 		publicnet.IPAddrProbe{
-			ProbeResult: okProbeResult(time.Millisecond),
-			Source:      "https://api.ipify.org",
-			Addr:        netip.MustParseAddr("203.0.113.7"),
+			Result: okProbeResult(time.Millisecond),
+			Source: "https://api.ipify.org",
+			Addr:   netip.MustParseAddr("203.0.113.7"),
 		},
 		publicnet.IPAddrProbe{
-			Status:    publicnet.StatusUnavailable,
+			Status:    probe.StatusUnavailable,
 			Message:   "ip family unavailable: ipv6: no route to host",
 			StartedAt: snapshotTime().Add(2 * time.Millisecond),
 			Duration:  3 * time.Millisecond,
@@ -53,10 +54,10 @@ func newSnapshot(t *testing.T) *publicnet.Snapshot {
 			Addr:      netip.Addr{},
 		},
 		publicnet.ConnProbe{
-			ProbeResult: okProbeResult(3 * time.Millisecond),
-			Method:      publicnet.MethodICMP,
-			Target:      netip.MustParseAddr("1.1.1.1"),
-			Ping: publicnet.PingStats{
+			Result: okProbeResult(3 * time.Millisecond),
+			Method: publicnet.MethodICMP,
+			Target: netip.MustParseAddr("1.1.1.1"),
+			Ping: probe.PingStats{
 				PacketsSent:     4,
 				PacketsReceived: 3,
 				RoundTripMin:    10 * time.Millisecond,
@@ -66,10 +67,10 @@ func newSnapshot(t *testing.T) *publicnet.Snapshot {
 			},
 		},
 		publicnet.ConnProbe{
-			ProbeResult: disabledProbeResult(),
-			Method:      publicnet.MethodUnknown,
-			Target:      netip.Addr{},
-			Ping: publicnet.PingStats{
+			Result: disabledProbeResult(),
+			Method: publicnet.MethodUnknown,
+			Target: netip.Addr{},
+			Ping: probe.PingStats{
 				PacketsSent:     0,
 				PacketsReceived: 0,
 				RoundTripMin:    0,
@@ -282,7 +283,7 @@ func TestSavePublicNetSnapshotIsAtomic(t *testing.T) {
 	// Snapshots from NewSnapshot are always valid, so build one by hand that
 	// passes the first inserts and fails a CHECK constraint on a later one.
 	snap := newSnapshot(t)
-	snap.ConnIPv6.Status = publicnet.StatusUnknown
+	snap.ConnIPv6.Status = probe.StatusUnknown
 
 	if err := store.SavePublicNetSnapshot(t.Context(), snap); err == nil {
 		t.Fatal("SavePublicNetSnapshot() error = nil, want a constraint error")

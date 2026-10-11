@@ -14,7 +14,9 @@ import (
 
 	"github.com/devusSs/netward/internal/adapter/iplookup"
 	"github.com/devusSs/netward/internal/adapter/ping"
+	"github.com/devusSs/netward/internal/domain/probe"
 	domain "github.com/devusSs/netward/internal/domain/publicnet"
+	"github.com/devusSs/netward/internal/service/probelog"
 )
 
 const (
@@ -38,7 +40,7 @@ type Pinger interface {
 
 // Config configures a [Service]. A nil lookup, a nil pinger or an invalid
 // target disables the corresponding probe; it is then recorded as
-// [domain.StatusDisabled].
+// [probe.StatusDisabled].
 type Config struct {
 	// IPv4Lookup looks up the public IPv4 address.
 	IPv4Lookup IPLookup
@@ -177,16 +179,9 @@ func (s *Service) probeIP(ctx context.Context, name string, lookup IPLookup) dom
 	logger := s.logger.With(slog.String("probe", name))
 
 	if lookup == nil {
-		logger.DebugContext(ctx, "probe disabled")
+		probelog.Log(ctx, logger, probe.Disabled())
 
-		return domain.IPAddrProbe{
-			Status:    domain.StatusDisabled,
-			Message:   "",
-			StartedAt: time.Time{},
-			Duration:  0,
-			Source:    "",
-			Addr:      netip.Addr{},
-		}
+		return domain.IPAddrProbe{Result: probe.Disabled(), Source: "", Addr: netip.Addr{}}
 	}
 
 	endpoint := lookup.Endpoint()
@@ -195,18 +190,18 @@ func (s *Service) probeIP(ctx context.Context, name string, lookup IPLookup) dom
 
 	start := s.now()
 	addr, err := lookup.Lookup(ctx)
-	result := s.result(start, err, iplookup.ErrUnavailable)
+	result := probe.NewResult(start, s.now().Sub(start), err, iplookup.ErrUnavailable)
 
-	if result.Status != domain.StatusOK {
+	if result.Status != probe.StatusOK {
 		addr = netip.Addr{}
 	}
 
-	logResult(ctx, logger, result, err, slog.String("addr", addrString(addr)))
+	probelog.Log(ctx, logger, result, slog.String("addr", addrString(addr)))
 
 	return domain.IPAddrProbe{
-		ProbeResult: result,
-		Source:      endpoint,
-		Addr:        addr,
+		Result: result,
+		Source: endpoint,
+		Addr:   addr,
 	}
 }
 
@@ -214,18 +209,15 @@ func (s *Service) probeConn(ctx context.Context, name string, target netip.Addr)
 	logger := s.logger.With(slog.String("probe", name))
 
 	if s.pinger == nil || !target.IsValid() {
-		logger.DebugContext(ctx, "probe disabled")
+		probelog.Log(ctx, logger, probe.Disabled())
 
-		var noStats domain.PingStats
+		var noStats probe.PingStats
 
 		return domain.ConnProbe{
-			Status:    domain.StatusDisabled,
-			Message:   "",
-			StartedAt: time.Time{},
-			Duration:  0,
-			Method:    domain.MethodUnknown,
-			Target:    target,
-			Ping:      noStats,
+			Result: probe.Disabled(),
+			Method: domain.MethodUnknown,
+			Target: target,
+			Ping:   noStats,
 		}
 	}
 
@@ -234,30 +226,27 @@ func (s *Service) probeConn(ctx context.Context, name string, target netip.Addr)
 
 	start := s.now()
 	stats, err := s.pinger.Ping(ctx, target)
-	result := s.result(start, err, ping.ErrUnavailable)
+	result := probe.NewResult(start, s.now().Sub(start), err, ping.ErrUnavailable)
 
-	if result.Status == domain.StatusOK && stats.PacketsReceived == 0 {
-		result.Status = domain.StatusFailed
+	if result.Status == probe.StatusOK && stats.PacketsReceived == 0 {
+		result.Status = probe.StatusFailed
 		result.Message = fmt.Sprintf("no reply from %s to %d packets", target, stats.PacketsSent)
 	}
 
-	logResult(ctx, logger, result, err,
+	probelog.Log(ctx, logger, result,
 		slog.Int("sent", stats.PacketsSent),
 		slog.Int("received", stats.PacketsReceived),
 		slog.Duration("rtt_avg", stats.RoundTripAvg),
 		slog.Duration("jitter", stats.Jitter),
 	)
 
-	if errors.Is(err, ping.ErrNotPermitted) {
-		logger.WarnContext(ctx, "icmp is not permitted for this process; "+
-			"allow unprivileged pings via net.ipv4.ping_group_range or run privileged with CAP_NET_RAW")
-	}
+	probelog.PingNotPermitted(ctx, logger, err)
 
 	return domain.ConnProbe{
-		ProbeResult: result,
-		Method:      domain.MethodICMP,
-		Target:      target,
-		Ping: domain.PingStats{
+		Result: result,
+		Method: domain.MethodICMP,
+		Target: target,
+		Ping: probe.PingStats{
 			PacketsSent:     stats.PacketsSent,
 			PacketsReceived: stats.PacketsReceived,
 			RoundTripMin:    stats.RoundTripMin,
@@ -266,30 +255,6 @@ func (s *Service) probeConn(ctx context.Context, name string, target netip.Addr)
 			Jitter:          stats.Jitter,
 		},
 	}
-}
-
-// result records the timing of a probe that started at start and maps err to
-// a status: errUnavailable means [domain.StatusUnavailable], any other error
-// [domain.StatusFailed].
-func (s *Service) result(start time.Time, err, errUnavailable error) domain.ProbeResult {
-	result := domain.ProbeResult{
-		Status:    domain.StatusOK,
-		Message:   "",
-		StartedAt: start.UTC(),
-		Duration:  s.now().Sub(start),
-	}
-
-	switch {
-	case err == nil:
-	case errors.Is(err, errUnavailable):
-		result.Status = domain.StatusUnavailable
-		result.Message = err.Error()
-	default:
-		result.Status = domain.StatusFailed
-		result.Message = err.Error()
-	}
-
-	return result
 }
 
 // logAddressChanges logs when a public address shows up for the first time or
@@ -307,59 +272,39 @@ func (s *Service) logAddressChange(
 	ctx context.Context,
 	name string,
 	last netip.Addr,
-	probe domain.IPAddrProbe,
+	p domain.IPAddrProbe,
 ) netip.Addr {
 	switch {
-	case probe.Status != domain.StatusOK || probe.Addr == last:
+	case p.Status != probe.StatusOK || p.Addr == last:
 		return last
 	case !last.IsValid():
 		s.logger.InfoContext(ctx, "public address detected",
 			slog.String("probe", name),
-			slog.String("addr", probe.Addr.String()),
+			slog.String("addr", p.Addr.String()),
 		)
 	default:
 		s.logger.InfoContext(ctx, "public address changed",
 			slog.String("probe", name),
 			slog.String("old", last.String()),
-			slog.String("new", probe.Addr.String()),
+			slog.String("new", p.Addr.String()),
 		)
 	}
 
-	return probe.Addr
+	return p.Addr
 }
 
-// logResult logs a finished probe. Failures are warnings; everything else is
-// expected and logged at debug level.
-func logResult(ctx context.Context, logger *slog.Logger, result domain.ProbeResult, err error, attrs ...slog.Attr) {
-	attrs = append(attrs,
-		slog.String("status", result.Status.String()),
-		slog.Duration("duration", result.Duration),
-	)
-
-	switch result.Status {
-	case domain.StatusOK:
-		logger.LogAttrs(ctx, slog.LevelDebug, "probe succeeded", attrs...)
-	case domain.StatusUnavailable:
-		logger.LogAttrs(ctx, slog.LevelDebug, "probe unavailable", append(attrs, slog.Any("error", err))...)
-	case domain.StatusFailed:
-		logger.LogAttrs(ctx, slog.LevelWarn, "probe failed", append(attrs, slog.String("reason", result.Message))...)
-	case domain.StatusUnknown, domain.StatusDisabled:
-		logger.LogAttrs(ctx, slog.LevelDebug, "probe finished", attrs...)
-	}
-}
-
-func ipAttr(name string, probe domain.IPAddrProbe) slog.Attr {
+func ipAttr(name string, p domain.IPAddrProbe) slog.Attr {
 	return slog.Group(name,
-		slog.String("status", probe.Status.String()),
-		slog.String("addr", addrString(probe.Addr)),
+		slog.String("status", p.Status.String()),
+		slog.String("addr", addrString(p.Addr)),
 	)
 }
 
-func connAttr(name string, probe domain.ConnProbe) slog.Attr {
+func connAttr(name string, p domain.ConnProbe) slog.Attr {
 	return slog.Group(name,
-		slog.String("status", probe.Status.String()),
-		slog.Int("lost", probe.Ping.PacketsLost()),
-		slog.Duration("rtt_avg", probe.Ping.RoundTripAvg),
+		slog.String("status", p.Status.String()),
+		slog.Int("lost", p.Ping.PacketsLost()),
+		slog.Duration("rtt_avg", p.Ping.RoundTripAvg),
 	)
 }
 

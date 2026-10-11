@@ -12,54 +12,13 @@ import (
 	"net/netip"
 	"time"
 	"uuid"
+
+	"github.com/devusSs/netward/internal/domain/probe"
 )
 
 // ErrInvalidSnapshot is returned by [NewSnapshot] when a probe is inconsistent.
 // Every validation error wraps it.
 var ErrInvalidSnapshot = errors.New("invalid public net snapshot")
-
-// ProbeStatus is the outcome of a probe.
-type ProbeStatus uint8
-
-const (
-	// StatusUnknown is the zero value. It marks a probe whose outcome was never
-	// set and is never valid in a [Snapshot].
-	StatusUnknown ProbeStatus = iota
-	// StatusOK means the probe succeeded.
-	StatusOK
-	// StatusUnavailable means the probe could not succeed on this network,
-	// for example an IPv6 lookup on a host without IPv6 connectivity. This is
-	// expected and not an error.
-	StatusUnavailable
-	// StatusFailed means the probe should have succeeded but did not. The
-	// probe's message describes what went wrong.
-	StatusFailed
-	// StatusDisabled means the probe was turned off in the configuration.
-	StatusDisabled
-)
-
-// String returns the lowercase name of the status.
-func (s ProbeStatus) String() string {
-	switch s {
-	case StatusUnknown:
-		return "unknown"
-	case StatusOK:
-		return "ok"
-	case StatusUnavailable:
-		return "unavailable"
-	case StatusFailed:
-		return "failed"
-	case StatusDisabled:
-		return "disabled"
-	}
-
-	return fmt.Sprintf("ProbeStatus(%d)", uint8(s))
-}
-
-// IsValid reports whether s is a known status other than [StatusUnknown].
-func (s ProbeStatus) IsValid() bool {
-	return s >= StatusOK && s <= StatusDisabled
-}
 
 // ConnMethod is the method a [ConnProbe] uses to reach its target.
 type ConnMethod uint8
@@ -96,64 +55,34 @@ func (m ConnMethod) IsValid() bool {
 	return m >= MethodICMP && m <= MethodHTTP
 }
 
-// ProbeResult holds the outcome and timing that every probe has in common.
-type ProbeResult struct {
-	// Status is the outcome of the probe.
-	Status ProbeStatus
-	// Message describes the outcome, typically the error text of a failed or
-	// unavailable probe. It is empty when there is nothing to report.
-	Message string
-	// StartedAt is when the probe started.
-	StartedAt time.Time
-	// Duration is how long the probe took.
-	Duration time.Duration
-}
-
 // IPAddrProbe is the result of looking up the host's public IP address of one
 // family.
 type IPAddrProbe struct {
-	ProbeResult
+	probe.Result
 
 	// Source identifies the lookup service, for example its URL.
 	Source string
 	// Addr is the public address. It is set only when the status is
-	// [StatusOK].
+	// [probe.StatusOK].
 	Addr netip.Addr
 }
 
 // ConnProbe is the result of checking connectivity to a target server over
 // one IP family.
 type ConnProbe struct {
-	ProbeResult
+	probe.Result
 
 	// Method is how the target was contacted.
 	Method ConnMethod
 	// Target is the address of the server that was contacted.
 	Target netip.Addr
 	// Ping holds the attempt counts and round-trip times.
-	Ping PingStats
+	Ping probe.PingStats
 }
 
 // Connected reports whether the target was reached.
 func (p ConnProbe) Connected() bool {
-	return p.Status == StatusOK
-}
-
-// PingStats summarizes the attempts a [ConnProbe] made. For [MethodICMP] an
-// attempt is an echo request; for the other methods it is a connection or
-// request.
-type PingStats struct {
-	PacketsSent     int
-	PacketsReceived int
-	RoundTripMin    time.Duration
-	RoundTripMax    time.Duration
-	RoundTripAvg    time.Duration
-	Jitter          time.Duration
-}
-
-// PacketsLost returns the number of attempts that got no response.
-func (s PingStats) PacketsLost() int {
-	return s.PacketsSent - s.PacketsReceived
+	return p.Status == probe.StatusOK
 }
 
 // Snapshot is the state of the host's public network at one point in time.
@@ -196,63 +125,54 @@ func NewSnapshot(timestamp time.Time, ipv4, ipv6 IPAddrProbe, connIPv4, connIPv6
 	}, nil
 }
 
-func (r ProbeResult) validate(probe string) error {
-	if !r.Status.IsValid() {
-		return fmt.Errorf("%w: %s: invalid status %s", ErrInvalidSnapshot, probe, r.Status)
-	}
-
-	return nil
-}
-
-func (p IPAddrProbe) normalized(probe string, inFamily func(netip.Addr) bool) (IPAddrProbe, error) {
-	err := p.validate(probe)
+func (p IPAddrProbe) normalized(name string, inFamily func(netip.Addr) bool) (IPAddrProbe, error) {
+	err := p.Validate()
 	if err != nil {
-		return IPAddrProbe{}, err
+		return IPAddrProbe{}, fmt.Errorf("%w: %s: %w", ErrInvalidSnapshot, name, err)
 	}
 
 	p.Addr = p.Addr.Unmap()
 
 	switch {
-	case p.Status == StatusOK && !p.Addr.IsValid():
-		return IPAddrProbe{}, fmt.Errorf("%w: %s: missing address", ErrInvalidSnapshot, probe)
-	case p.Status == StatusOK && !inFamily(p.Addr):
-		return IPAddrProbe{}, fmt.Errorf("%w: %s: address %s has wrong family", ErrInvalidSnapshot, probe, p.Addr)
-	case p.Status != StatusOK && p.Addr.IsValid():
+	case p.Status == probe.StatusOK && !p.Addr.IsValid():
+		return IPAddrProbe{}, fmt.Errorf("%w: %s: missing address", ErrInvalidSnapshot, name)
+	case p.Status == probe.StatusOK && !inFamily(p.Addr):
+		return IPAddrProbe{}, fmt.Errorf("%w: %s: address %s has wrong family", ErrInvalidSnapshot, name, p.Addr)
+	case p.Status != probe.StatusOK && p.Addr.IsValid():
 		return IPAddrProbe{}, fmt.Errorf(
 			"%w: %s: address %s set on probe with status %s",
-			ErrInvalidSnapshot, probe, p.Addr, p.Status,
+			ErrInvalidSnapshot, name, p.Addr, p.Status,
 		)
 	}
 
 	return p, nil
 }
 
-func (p ConnProbe) normalized(probe string, inFamily func(netip.Addr) bool) (ConnProbe, error) {
-	err := p.validate(probe)
+func (p ConnProbe) normalized(name string, inFamily func(netip.Addr) bool) (ConnProbe, error) {
+	err := p.Validate()
 	if err != nil {
-		return ConnProbe{}, err
+		return ConnProbe{}, fmt.Errorf("%w: %s: %w", ErrInvalidSnapshot, name, err)
 	}
 
-	if p.Status == StatusDisabled {
+	if p.Status == probe.StatusDisabled {
 		return p, nil
 	}
 
 	p.Target = p.Target.Unmap()
 
+	err = p.Ping.Validate()
+
 	switch {
 	case !p.Method.IsValid():
-		return ConnProbe{}, fmt.Errorf("%w: %s: invalid method %s", ErrInvalidSnapshot, probe, p.Method)
+		return ConnProbe{}, fmt.Errorf("%w: %s: invalid method %s", ErrInvalidSnapshot, name, p.Method)
 	case !p.Target.IsValid():
-		return ConnProbe{}, fmt.Errorf("%w: %s: missing target", ErrInvalidSnapshot, probe)
+		return ConnProbe{}, fmt.Errorf("%w: %s: missing target", ErrInvalidSnapshot, name)
 	case !inFamily(p.Target):
-		return ConnProbe{}, fmt.Errorf("%w: %s: target %s has wrong family", ErrInvalidSnapshot, probe, p.Target)
-	case p.Ping.PacketsSent < 0 || p.Ping.PacketsReceived < 0 || p.Ping.PacketsReceived > p.Ping.PacketsSent:
-		return ConnProbe{}, fmt.Errorf(
-			"%w: %s: invalid packet counts (sent %d, received %d)",
-			ErrInvalidSnapshot, probe, p.Ping.PacketsSent, p.Ping.PacketsReceived,
-		)
-	case p.Status == StatusOK && p.Ping.PacketsReceived == 0:
-		return ConnProbe{}, fmt.Errorf("%w: %s: status ok but no packets received", ErrInvalidSnapshot, probe)
+		return ConnProbe{}, fmt.Errorf("%w: %s: target %s has wrong family", ErrInvalidSnapshot, name, p.Target)
+	case err != nil:
+		return ConnProbe{}, fmt.Errorf("%w: %s: %w", ErrInvalidSnapshot, name, err)
+	case p.Status == probe.StatusOK && p.Ping.PacketsReceived == 0:
+		return ConnProbe{}, fmt.Errorf("%w: %s: status ok but no packets received", ErrInvalidSnapshot, name)
 	}
 
 	return p, nil

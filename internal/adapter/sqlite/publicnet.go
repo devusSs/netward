@@ -64,40 +64,40 @@ func (s *Store) SavePublicNetSnapshot(ctx context.Context, snap *publicnet.Snaps
 	return nil
 }
 
-func ipProbeParams(id []byte, family string, probe publicnet.IPAddrProbe) sqlcgen.InsertPublicNetIPProbeParams {
+func ipProbeParams(id []byte, family string, p publicnet.IPAddrProbe) sqlcgen.InsertPublicNetIPProbeParams {
 	return sqlcgen.InsertPublicNetIPProbeParams{
 		SnapshotID: id,
 		Family:     family,
-		Status:     probe.Status.String(),
-		Message:    probe.Message,
-		StartedAt:  nullTime(probe.StartedAt),
-		DurationNs: probe.Duration.Nanoseconds(),
-		Source:     probe.Source,
-		Addr:       nullAddr(probe.Addr),
+		Status:     p.Status.String(),
+		Message:    p.Message,
+		StartedAt:  nullTime(p.StartedAt),
+		DurationNs: p.Duration.Nanoseconds(),
+		Source:     p.Source,
+		Addr:       nullAddr(p.Addr),
 	}
 }
 
-func connProbeParams(id []byte, family string, probe publicnet.ConnProbe) sqlcgen.InsertPublicNetConnProbeParams {
+func connProbeParams(id []byte, family string, p publicnet.ConnProbe) sqlcgen.InsertPublicNetConnProbeParams {
 	method := sql.NullString{String: "", Valid: false}
-	if probe.Method != publicnet.MethodUnknown {
-		method = sql.NullString{String: probe.Method.String(), Valid: true}
+	if p.Method != publicnet.MethodUnknown {
+		method = sql.NullString{String: p.Method.String(), Valid: true}
 	}
 
 	return sqlcgen.InsertPublicNetConnProbeParams{
 		SnapshotID:      id,
 		Family:          family,
-		Status:          probe.Status.String(),
-		Message:         probe.Message,
-		StartedAt:       nullTime(probe.StartedAt),
-		DurationNs:      probe.Duration.Nanoseconds(),
+		Status:          p.Status.String(),
+		Message:         p.Message,
+		StartedAt:       nullTime(p.StartedAt),
+		DurationNs:      p.Duration.Nanoseconds(),
 		Method:          method,
-		Target:          nullAddr(probe.Target),
-		PacketsSent:     int64(probe.Ping.PacketsSent),
-		PacketsReceived: int64(probe.Ping.PacketsReceived),
-		RttMinNs:        probe.Ping.RoundTripMin.Nanoseconds(),
-		RttMaxNs:        probe.Ping.RoundTripMax.Nanoseconds(),
-		RttAvgNs:        probe.Ping.RoundTripAvg.Nanoseconds(),
-		JitterNs:        probe.Ping.Jitter.Nanoseconds(),
+		Target:          nullAddr(p.Target),
+		PacketsSent:     int64(p.Ping.PacketsSent),
+		PacketsReceived: int64(p.Ping.PacketsReceived),
+		RttMinNs:        p.Ping.RoundTripMin.Nanoseconds(),
+		RttMaxNs:        p.Ping.RoundTripMax.Nanoseconds(),
+		RttAvgNs:        p.Ping.RoundTripAvg.Nanoseconds(),
+		JitterNs:        p.Ping.Jitter.Nanoseconds(),
 	}
 }
 
