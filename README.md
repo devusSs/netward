@@ -42,18 +42,39 @@ On first start netward creates a self-signed certificate for HTTPS, like Pi-hole
 The same data is available as JSON:
 
 - `GET /api/publicnet/latest`, `/api/privatenet/latest` and `/api/domainip/latest` return the latest check of each feature.
-- `GET /api/changes?since=24h&limit=100` returns the recent changes, newest first. `since` accepts durations such as `90m`, `24h` or `7d` (at most `31d`).
+- `GET /api/changes?since=24h&limit=100` returns the recent changes, newest first. `since` accepts durations such as `90m`, `24h` or `7d` (at most `7d`).
 - `GET /api/health` reports whether netward is running.
 
 Checks are kept for 30 days by default (`retention` in the configuration).
 
 ## Setup
 
-_Coming soon._
+netward needs Go 1.27 or later to build:
+
+```sh
+go build -o netward ./cmd/netward
+```
+
+Copy [`netward.example.yaml`](./netward.example.yaml) to `netward.yaml` and change what you need. Every setting has a default, so the file can be short or missing entirely.
+
+Pings are sent without root privileges. On Linux this requires the `net.ipv4.ping_group_range` sysctl to include the group netward runs as, for example:
+
+```sh
+sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
+```
+
+Alternatively, set `ping.privileged: true` and give netward the `CAP_NET_RAW` capability or run it as root.
 
 ## Usage
 
-_Coming soon._
+```sh
+./netward                       # uses ./netward.yaml, or the defaults if it does not exist
+./netward -config /etc/netward/netward.yaml
+```
+
+netward then checks the configured features right away and on their intervals, stores the results in its SQLite database (`netward.db` by default) and serves the web interface at `https://<host>:8443`. It creates `netward-cert.pem` and `netward-key.pem` for HTTPS on first start. Paths in the configuration are relative to the working directory.
+
+Stop netward with Ctrl+C or `SIGTERM`. It cancels checks that are still running, without saving partial results, and shuts down cleanly.
 
 ## Disclaimer
 
