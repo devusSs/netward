@@ -54,6 +54,7 @@ func TestOpen(t *testing.T) {
 	for _, want := range []string{
 		`msg="migration applied" component=sqlite version=1 file=00001_create_public_net_snapshots.sql`,
 		`msg="migration applied" component=sqlite version=2 file=00002_create_private_net_snapshots.sql`,
+		`msg="migration applied" component=sqlite version=3 file=00003_create_domain_ip_snapshots.sql`,
 		`msg="database opened" component=sqlite path=` + path,
 	} {
 		if !strings.Contains(logs.String(), want) {
@@ -64,11 +65,11 @@ func TestOpen(t *testing.T) {
 	var tables int
 
 	err := store.DB().QueryRowContext(t.Context(),
-		`SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND (name LIKE 'public_net_%' OR name LIKE 'private_net_%')`,
+		`SELECT count(*) FROM sqlite_schema WHERE type = 'table' AND (name LIKE 'public_net_%' OR name LIKE 'private_net_%' OR name LIKE 'domain_ip_%')`,
 	).
 		Scan(&tables)
-	if err != nil || tables != 6 {
-		t.Errorf("public and private net tables = %d (%v), want 6", tables, err)
+	if err != nil || tables != 9 {
+		t.Errorf("public net, private net and domain ip tables = %d (%v), want 9", tables, err)
 	}
 }
 

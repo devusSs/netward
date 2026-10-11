@@ -8,6 +8,27 @@ import (
 	"database/sql"
 )
 
+type DomainIpAddr struct {
+	SnapshotID []byte
+	Domain     string
+	Addr       string
+}
+
+type DomainIpLookup struct {
+	SnapshotID []byte
+	Domain     string
+	Status     string
+	Message    string
+	StartedAt  sql.NullInt64
+	DurationNs int64
+}
+
+type DomainIpSnapshot struct {
+	ID       []byte
+	TakenAt  int64
+	Resolver string
+}
+
 type PrivateNetAddr struct {
 	SnapshotID []byte
 	Interface  string
