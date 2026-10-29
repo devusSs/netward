@@ -1,0 +1,51 @@
+{{define "history" -}}
+<main id="history" class="history" hx-get="/fragments/history?range={{.Range}}" hx-trigger="every {{.Refresh}}"
+      hx-swap="outerHTML" data-server-time="{{.ServerTime}}">
+  <div class="history-head">
+    <h1>Changes</h1>
+    <p class="count">{{len .Changes}}{{if .Truncated}}+{{end}} {{if eq (len .Changes) 1}}change{{else}}changes{{end}}</p>
+    <nav class="ranges" aria-label="Time range">
+      {{- range .Ranges}}
+      <a href="/history?range={{.Value}}" hx-get="/fragments/history?range={{.Value}}" hx-target="#history"
+         hx-swap="outerHTML" hx-push-url="/history?range={{.Value}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
+      {{- end}}
+    </nav>
+  </div>
+  {{- if .Changes}}
+  <ol class="changes">
+    {{- range .Changes}}
+    <li class="change change-{{.Kind}}">
+      <time datetime="{{.DateTime}}">{{.Time}}</time>
+      <span class="source source-{{.SourceID}}">{{.Source}}</span>
+      <span class="subject">{{.Subject}}{{if .CopySubject}}{{template "copy" .Subject}}{{end}}</span>
+      <span class="what">
+        {{- if eq .Kind "status"}}
+        <span class="status status-{{.Old}}">{{.Old}}</span>{{template "arrow"}}<span class="status status-{{.New}}">{{.New}}</span>
+        {{- else if eq .Kind "added"}}
+        <span class="kind">added</span>{{template "change-value" .New}}
+        {{- else if eq .Kind "removed"}}
+        <span class="kind">removed</span>{{template "change-value" .Old}}
+        {{- else}}
+        {{template "change-value" .Old}}{{template "arrow"}}{{template "change-value" .New}}
+        {{- end}}
+      </span>
+      {{- if .Message}}<p class="message">{{.Message}}</p>{{end}}
+    </li>
+    {{- end}}
+  </ol>
+  {{- if .Truncated}}
+  <p class="note">Showing the newest {{.Limit}} changes.</p>
+  {{- end}}
+  {{- else}}
+  <p class="empty">No changes in this period.</p>
+  {{- end}}
+</main>
+{{- end}}
+
+{{define "arrow" -}}
+<span class="arrow"><span aria-hidden="true">→</span><span class="visually-hidden"> to </span></span>
+{{- end}}
+
+{{define "change-value" -}}
+{{if .}}<span class="val"><span class="addr">{{.}}</span>{{template "copy" .}}</span>{{else}}<span class="addr">–</span>{{end}}
+{{- end}}

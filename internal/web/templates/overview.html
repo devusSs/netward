@@ -1,49 +1,22 @@
 {{define "overview" -}}
-<main id="overview" hx-get="/fragments/overview?range={{.Range}}" hx-trigger="every 30s" hx-swap="outerHTML"
+<main id="overview" class="overview" hx-get="/fragments/overview" hx-trigger="every {{.Refresh}}" hx-swap="outerHTML"
       data-server-time="{{.ServerTime}}">
-  <section class="cards" aria-label="Current state">
-    {{- range .Cards}}{{template "card" .}}{{end}}
-  </section>
-
-  <section class="changes" aria-labelledby="changes-title">
-    <div class="changes-head">
-      <h2 id="changes-title">Recent changes</h2>
-      <nav class="ranges" aria-label="Time range">
-        {{- range .Ranges}}
-        <a href="/?range={{.Value}}" hx-get="/fragments/overview?range={{.Value}}" hx-target="#overview"
-           hx-swap="outerHTML" hx-push-url="/?range={{.Value}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a>
-        {{- end}}
-      </nav>
-    </div>
-    {{- if .Changes}}
-    <ol class="change-list">
-      {{- range .Changes}}
-      <li class="change change-{{.Kind}}">
-        <time datetime="{{.DateTime}}">{{.Time}}</time>
-        <span class="source">{{.Source}}</span>
-        <span class="subject">{{.Subject}}</span>
-        <span class="text">{{.Text}}</span>
-        {{- if .Message}}<span class="message">{{.Message}}</span>{{end}}
-      </li>
-      {{- end}}
-    </ol>
-    {{- if .Truncated}}
-    <p class="note">Showing the newest {{.Limit}} changes.</p>
-    {{- end}}
-    {{- else}}
-    <p class="empty">No changes in this period.</p>
-    {{- end}}
-  </section>
-
-  <p class="updated">Updated at {{.GeneratedAt}}</p>
+  <h1 class="visually-hidden">Overview</h1>
+  {{- range .Cards}}{{template "card" .}}{{end}}
 </main>
 {{- end}}
 
 {{define "card" -}}
-<article class="card">
-  <header>
-    <h2>{{.Title}}</h2>
-    {{- if .Subtitle}}<p class="subtitle">{{.Subtitle}}</p>{{end}}
+<section class="card card-{{.ID}}" aria-labelledby="card-{{.ID}}">
+  <header class="card-head">
+    <span class="card-icon" aria-hidden="true">{{template "icon" .ID}}</span>
+    <div class="card-title">
+      <h2 id="card-{{.ID}}">{{.Title}}</h2>
+      {{- if .Subtitle}}<p class="subtitle">{{.Subtitle}}</p>{{end}}
+    </div>
+    {{- if .Summary}}
+    <span class="pill status-{{.SummaryStatus}}">{{.Summary}}</span>
+    {{- end}}
   </header>
   {{- if .Rows}}
   {{- if not .Enabled}}
@@ -54,16 +27,20 @@
     <li class="row">
       <div class="row-head">
         <span class="label">{{.Label}}</span>
+        {{- if .CopyLabel}}{{template "copy" .Label}}{{end}}
         <span class="status status-{{.Status}}">{{.Status}}</span>
       </div>
       {{- range .Values}}
-      <div class="value">{{.}}</div>
+      <div class="value"><span class="addr">{{.Text}}{{if .Suffix}}<span class="suffix">{{.Suffix}}</span>{{end}}</span>
+        {{- if .Copy}}{{template "copy" .Copy}}{{end}}</div>
       {{- end}}
-      {{- if .Detail}}
-      <div class="detail">{{.Detail}}</div>
+      {{- if .Details}}
+      <ul class="facts">
+        {{- range .Details}}<li>{{.}}</li>{{end -}}
+      </ul>
       {{- end}}
       {{- if .Message}}
-      <div class="message">{{.Message}}</div>
+      <p class="message">{{.Message}}</p>
       {{- end}}
     </li>
     {{- end}}
@@ -74,5 +51,5 @@
   {{- else}}
   <p class="empty">Disabled in the configuration.</p>
   {{- end}}
-</article>
+</section>
 {{- end}}

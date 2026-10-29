@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -446,45 +447,105 @@ func TestAPIHealth(t *testing.T) {
 	}
 }
 
+func domainSnapshot() *domainip.Snapshot {
+	return &domainip.Snapshot{
+		ID:       uuid.MustParse("01a12880-0b1c-7d2e-8f30-415263748596"),
+		Resolver: "1.1.1.1:53",
+		Lookups: []domainip.LookupProbe{{
+			Result: okResult(12 * time.Millisecond),
+			Domain: "home.example.com",
+			Addrs:  []netip.Addr{netip.MustParseAddr("203.0.113.7"), netip.MustParseAddr("2001:db8::7")},
+		}},
+		Timestamp: taken(),
+	}
+}
+
+func wantContains(t *testing.T, body string, wants ...string) {
+	t.Helper()
+
+	for _, want := range wants {
+		if !strings.Contains(body, want) {
+			t.Errorf("page does not contain %q", want)
+		}
+	}
+}
+
 func TestOverviewPage(t *testing.T) {
 	t.Parallel()
 
-	rec := newFixture().get(t, "/")
+	f := newFixture()
+	f.snapshots.domains = []*domainip.Snapshot{domainSnapshot()}
+	f.features.DomainIP = true
+
+	rec := f.get(t, "/")
 	body := rec.Body.String()
 
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "text/html; charset=utf-8" {
 		t.Fatalf("GET / = %d %s", rec.Code, rec.Header().Get("Content-Type"))
 	}
 
-	for _, want := range []string{
+	wantContains(t, body,
 		"<!doctype html>",
-		`<script src="/static/htmx.min.js" defer></script>`,
-		`<script src="/static/app.js" defer></script>`,
+		"<title>Overview · netward</title>",
+		`<a href="/" aria-current="page">`,
+		`<a href="/history">`,
+		`<time datetime="2026-10-11T12:30:00Z" data-relative data-updated>at 12:30:00</time>`,
+		`hx-get="/fragments/overview" hx-trigger="every 5s"`,
 		`data-server-time="2026-10-11T12:30:00Z"`,
-		`hx-get="/fragments/overview?range=24h" hx-trigger="every 30s"`,
-		"<h2>Public network</h2>",
+		`<h2 id="card-public">Public network</h2>`,
 		`<span class="label">Public IPv4</span>`,
 		`<span class="status status-ok">ok</span>`,
-		`<div class="value">203.0.113.7</div>`,
-		`<div class="detail">api.ipify.org · 166.0 ms</div>`,
+		`<span class="addr">203.0.113.7</span>`,
+		`<button type="button" class="copy" data-copy="203.0.113.7" aria-label="Copy 203.0.113.7" title="Copy" hidden>`,
+		"<li>api.ipify.org</li><li>166.0 ms</li>",
 		`<span class="status status-unavailable">unavailable</span>`,
-		`<div class="message">ip family unavailable: ipv6: no route to host</div>`,
-		`<div class="detail">4/4 replies · avg 16.7 ms · jitter 1.6 ms</div>`,
+		`<p class="message">ip family unavailable: ipv6: no route to host</p>`,
+		"<li>4/4 replies</li><li>avg 16.7 ms</li><li>jitter 1.6 ms</li>",
+		`<span class="pill status-unavailable">1 unavailable</span>`,
 		`<span class="label">en0</span>`,
-		`<div class="value">192.168.178.26/24</div>`,
-		`<div class="value">fe80::1%en0</div>`,
-		`<div class="detail">0/4 replies</div>`,
+		`<span class="addr">192.168.178.26<span class="suffix">/24</span></span>`,
+		`data-copy="192.168.178.26"`,
+		`<span class="addr">fe80::1%en0</span>`,
+		"<li>0/4 replies</li>",
+		`<span class="pill status-failed">1 failed</span>`,
 		`title="2026-10-11 12:29:18">Checked <time datetime="2026-10-11T12:29:18Z" data-relative>42 s ago</time>`,
-		"<p class=\"empty\">Disabled in the configuration.</p>",
-		`<a href="/?range=24h" hx-get="/fragments/overview?range=24h"`,
-		`class="active" aria-current="page">24 hours</a>`,
-		`<time datetime="2026-10-11T12:20:00Z">12:20:00</time>`,
-		`<span class="subject">Public IPv4</span>`,
-		`<span class="text">198.51.100.9 → 203.0.113.7</span>`,
-		"Updated at 12:30:00",
+		`<p class="subtitle">via 1.1.1.1:53</p>`,
+		`<span class="label">home.example.com</span><button type="button" class="copy" data-copy="home.example.com"`,
+		`data-copy="2001:db8::7"`,
+		`<span class="pill status-ok">all ok</span>`,
+	)
+
+	if strings.Contains(body, "198.51.100.9") {
+		t.Error("the overview shows changes, want them on the history page only")
+	}
+}
+
+func TestPageLinksVersionedAssets(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture()
+	body := f.get(t, "/").Body.String()
+
+	for _, tag := range []string{
+		`<link rel="icon" href="/static/favicon.svg?v=`,
+		`<link rel="stylesheet" href="/static/style.css?v=`,
+		`<script src="/static/htmx.min.js?v=`,
+		`<script src="/static/app.js?v=`,
 	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q", want)
+		_, rest, found := strings.Cut(body, tag)
+		version, _, _ := strings.Cut(rest, `"`)
+
+		if !found || len(version) != 12 || strings.Trim(version, "0123456789abcdef") != "" {
+			t.Errorf("page does not link %s<12 hex digits>, got version %q", tag, version)
+
+			continue
+		}
+
+		target := strings.TrimPrefix(strings.TrimPrefix(tag, `<script src="`), `<link rel="stylesheet" href="`)
+		target = strings.TrimPrefix(target, `<link rel="icon" href="`)
+
+		if rec := f.get(t, target+version); rec.Code != http.StatusOK {
+			t.Errorf("GET %s%s = %d, want 200", target, version, rec.Code)
 		}
 	}
 }
@@ -492,38 +553,114 @@ func TestOverviewPage(t *testing.T) {
 func TestOverviewFragment(t *testing.T) {
 	t.Parallel()
 
-	f := newFixture()
-
-	body := f.get(t, "/fragments/overview?range=7d").Body.String()
+	body := newFixture().get(t, "/fragments/overview").Body.String()
 
 	if strings.Contains(body, "<html") || !strings.HasPrefix(body, `<main id="overview"`) {
 		t.Errorf("fragment is not just the overview: %.80s", body)
 	}
 
-	if !strings.Contains(body, `hx-get="/fragments/overview?range=7d"`) ||
-		!strings.Contains(body, `class="active" aria-current="page">7 days</a>`) {
-		t.Error("fragment does not keep the selected range")
+	wantContains(t, body, `hx-trigger="every 5s"`, `<span class="addr">203.0.113.7</span>`)
+}
+
+func TestHistoryPage(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture()
+	f.changes.events = append(f.changes.events,
+		history.Event{
+			Time:    now().Add(-20 * time.Minute),
+			Source:  history.SourcePrivateNet,
+			Subject: "gateway_ipv6",
+			Kind:    history.KindStatus,
+			Old:     "ok",
+			New:     "failed",
+			Message: "no reply",
+		},
+		history.Event{
+			Time:    now().Add(-25 * time.Hour),
+			Source:  history.SourceDomainIP,
+			Subject: "home.example.com",
+			Kind:    history.KindAdded,
+			Old:     "",
+			New:     "2001:db8::7",
+			Message: "",
+		},
+	)
+
+	rec := f.get(t, "/history")
+	body := rec.Body.String()
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /history = %d", rec.Code)
 	}
+
+	wantContains(t, body,
+		"<title>History · netward</title>",
+		`<a href="/history" aria-current="page">`,
+		`<main id="history" class="history" hx-get="/fragments/history?range=24h" hx-trigger="every 15s"`,
+		`<p class="count">3 changes</p>`,
+		`hx-push-url="/history?range=24h" aria-current="page">24 hours</a>`,
+		`<time datetime="2026-10-11T12:20:00Z">12:20:00</time>`,
+		`<span class="source source-public">Public</span>`,
+		`<span class="subject">Public IPv4</span>`,
+		`<span class="addr">198.51.100.9</span><button type="button" class="copy" data-copy="198.51.100.9"`,
+		`data-copy="203.0.113.7"`,
+		`<span class="subject">Gateway (IPv6)</span>`,
+		`<span class="status status-ok">ok</span>`,
+		`<span class="status status-failed">failed</span>`,
+		`<p class="message">no reply</p>`,
+		`<time datetime="2026-10-10T11:30:00Z">Oct 10 11:30</time>`,
+		`<span class="subject">home.example.com<button type="button" class="copy" data-copy="home.example.com"`,
+		`<span class="kind">added</span><span class="val"><span class="addr">2001:db8::7</span>`,
+	)
+
+	if !f.changes.since.Equal(now().Add(-24*time.Hour)) || f.changes.limit != 100 {
+		t.Errorf("Changes() since, limit = %v, %d, want 24 hours back, 100", f.changes.since, f.changes.limit)
+	}
+}
+
+func TestHistoryFragment(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture()
+
+	body := f.get(t, "/fragments/history?range=7d").Body.String()
+
+	if strings.Contains(body, "<html") || !strings.HasPrefix(body, `<main id="history"`) {
+		t.Errorf("fragment is not just the history: %.80s", body)
+	}
+
+	wantContains(t, body, `hx-get="/fragments/history?range=7d"`, `aria-current="page">7 days</a>`,
+		`<p class="count">1 change</p>`)
 
 	if !f.changes.since.Equal(now().Add(-7 * 24 * time.Hour)) {
 		t.Errorf("Changes() since = %v, want 7 days back", f.changes.since)
 	}
 }
 
-func TestOverviewFallsBackToDefaultRange(t *testing.T) {
+func TestHistoryFallsBackToDefaultRange(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture()
 
-	body := f.get(t, "/?range=nonsense").Body.String()
+	body := f.get(t, "/history?range=nonsense").Body.String()
 
-	if !strings.Contains(body, `class="active" aria-current="page">24 hours</a>`) ||
-		!f.changes.since.Equal(now().Add(-24*time.Hour)) {
+	if !strings.Contains(body, `aria-current="page">24 hours</a>`) || !f.changes.since.Equal(now().Add(-24*time.Hour)) {
 		t.Error("an invalid range did not fall back to 24 hours")
 	}
 }
 
-func TestOverviewWithoutData(t *testing.T) {
+func TestHistoryTruncated(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture()
+	f.changes.events = slices.Repeat(f.changes.events, 100)
+
+	wantContains(t, f.get(t, "/history").Body.String(), `<p class="count">100+ changes</p>`,
+		"Showing the newest 100 changes.")
+}
+
+func TestPagesWithoutData(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture()
@@ -532,28 +669,38 @@ func TestOverviewWithoutData(t *testing.T) {
 	f.changes.events = nil
 	f.features.PublicNet = false
 
-	body := f.get(t, "/").Body.String()
-
-	for _, want := range []string{
+	wantContains(t, f.get(t, "/").Body.String(),
 		"Disabled in the configuration.",
 		"No data yet. The first check runs shortly after netward starts.",
-		"No changes in this period.",
-	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("page does not contain %q", want)
-		}
-	}
+	)
+	wantContains(t, f.get(t, "/history").Body.String(), "No changes in this period.", `<p class="count">0 changes</p>`)
 }
 
-func TestOverviewError(t *testing.T) {
+func TestDisabledFeatureWithData(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture()
-	f.changes.err = errors.New("boom")
+	f.features.PublicNet = false
 
-	rec := f.get(t, "/")
-	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "boom") {
-		t.Errorf("GET / = %d %q, want 500 without details", rec.Code, rec.Body.String())
+	wantContains(t, f.get(t, "/").Body.String(), "Disabled in the configuration. Showing the last check.")
+}
+
+func TestPageErrors(t *testing.T) {
+	t.Parallel()
+
+	for _, target := range []string{"/", "/fragments/overview", "/history", "/fragments/history"} {
+		f := newFixture()
+		f.snapshots.err = errors.New("boom")
+		f.changes.err = errors.New("boom")
+
+		rec := f.get(t, target)
+		if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "boom") {
+			t.Errorf("GET %s = %d %q, want 500 without details", target, rec.Code, rec.Body.String())
+		}
+
+		if !strings.Contains(f.logs.String(), "boom") {
+			t.Errorf("GET %s: logs = %s, want the error logged", target, f.logs.String())
+		}
 	}
 }
 
@@ -589,6 +736,8 @@ func TestStaticFiles(t *testing.T) {
 		{"/static/style.css", "text/css; charset=utf-8", "--accent"},
 		{"/static/app.js", "text/javascript; charset=utf-8", "time[data-relative]"},
 		{"/static/favicon.svg", "image/svg+xml", "<svg"},
+		{"/static/fonts/ibm-plex-sans.woff2", "font/woff2", "wOF2"},
+		{"/static/fonts/jetbrains-mono.woff2", "font/woff2", "wOF2"},
 	}
 
 	for _, tt := range tests {

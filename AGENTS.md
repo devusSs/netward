@@ -118,8 +118,9 @@ The linter configuration in `.golangci.yml` is strict and authoritative; do not 
 
 ## Web interface
 
-- Server-rendered `html/template` pages; HTMX (vendored in `internal/web/static/htmx.min.js`) refreshes the overview fragment every 30 seconds, and `static/app.js` updates the relative times every second. Every page must also work without JavaScript.
-- Nothing is loaded from other hosts: no CDNs, web fonts or analytics. All assets are embedded.
+- Server-rendered `html/template` pages: the overview (`/`, cards per feature, meant to fit on one screen) and the history (`/history`). HTMX (vendored in `internal/web/static/htmx.min.js`) refreshes their fragments (`/fragments/overview` every 5 seconds, `/fragments/history` every 15 seconds). `static/app.js` updates the relative times, enables the copy buttons, shows when a refresh failed and keeps text selections and focus across refreshes. Every page must also work without JavaScript; controls that need it, like the copy buttons, are rendered `hidden` and enabled by the script.
+- Link static files with the `asset` template function (`{{asset "style.css"}}`), which adds a content hash so that browsers do not keep an outdated cached copy after an update.
+- Nothing is loaded from other hosts: no CDNs, hosted web fonts or analytics. All assets are embedded, including the fonts (IBM Plex Sans and JetBrains Mono in `static/fonts`, with their OFL licenses) and the Lucide icons inlined in `templates/page.html`.
 - The Content Security Policy is strict (`script-src 'self'`, no inline scripts or styles, no `eval`). HTMX runs with `allowEval: false` and `allowScriptTags: false`. Do not weaken this; put new behavior in `static/app.js` and new styles in `static/style.css` (with light and dark mode via CSS variables).
 - Internal errors return a generic 500 and are logged; never expose error details or paths in responses.
 - JSON API changes are user-facing: keep responses backward compatible and document new endpoints in the README.

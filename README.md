@@ -35,7 +35,12 @@ and limit the monitored network interfaces, for example to exclude Docker or VPN
 
 ### Web Interface
 
-netward serves a web interface at `https://<host>:8443` by default. It shows the current public, private and domain state and the recent changes, such as a new public IP address, a gateway that stopped answering or a domain that now points elsewhere. It refreshes itself every 30 seconds and loads nothing from other hosts.
+netward serves a web interface at `https://<host>:8443` by default. It has two pages:
+
+- **Overview** shows the current public, private and domain state on one screen and refreshes itself every 5 seconds.
+- **History** lists the recent changes for the last hour, 24 hours or 7 days, such as a new public IP address, a gateway that stopped answering or a domain that now points elsewhere.
+
+Every address and domain has a copy button. The interface follows your system's light or dark mode and loads nothing from other hosts; its fonts are bundled.
 
 On first start netward creates a self-signed certificate for HTTPS, like Pi-hole does, so your browser will warn about it once. You can also point netward at your own certificate.
 

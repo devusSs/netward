@@ -1,9 +1,10 @@
 // Package web serves netward's web interface and its JSON API.
 //
-// The interface is rendered on the server with [html/template]. HTMX, which
-// is embedded together with the stylesheet, refreshes the overview every 30
-// seconds without reloading the page, and every page also works without
-// JavaScript. Nothing is loaded from other hosts.
+// The interface is rendered on the server with [html/template] and has two
+// pages: the overview with the latest state of every feature and the history
+// of recent changes. HTMX, which is embedded together with the stylesheet,
+// fonts and a small script, refreshes them without reloading the page, and
+// both also work without JavaScript. Nothing is loaded from other hosts.
 //
 // The API under /api returns the latest snapshot of every feature and the
 // recent changes as JSON.
@@ -11,8 +12,10 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -20,6 +23,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/devusSs/netward/internal/domain/domainip"
@@ -119,7 +123,21 @@ func New(cfg Config) (*Server, error) {
 		location = time.Local
 	}
 
-	templates, err := template.New("").ParseFS(assets, "templates/*.html")
+	versions, err := assetVersions()
+	if err != nil {
+		return nil, err
+	}
+
+	templates, err := template.New("").Funcs(template.FuncMap{
+		"asset": func(name string) (string, error) {
+			version, ok := versions[name]
+			if !ok {
+				return "", fmt.Errorf("unknown static file %q", name)
+			}
+
+			return "/static/" + name + "?v=" + version, nil
+		},
+	}).ParseFS(assets, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parse templates: %w", err)
 	}
@@ -140,6 +158,38 @@ func New(cfg Config) (*Server, error) {
 	s.handler = s.routes()
 
 	return s, nil
+}
+
+// assetVersionLength is how many hex digits of a static file's hash are put
+// into its URL.
+const assetVersionLength = 12
+
+// assetVersions hashes every static file. Pages link to static files with
+// the hash in the query (see the template function asset), so browsers,
+// which cache static files, load a file again once it changed.
+func assetVersions() (map[string]string, error) {
+	versions := make(map[string]string)
+
+	err := fs.WalkDir(assets, "static", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+
+		data, err := fs.ReadFile(assets, path)
+		if err != nil {
+			return err //nolint:wrapcheck // Wrapped below.
+		}
+
+		sum := sha256.Sum256(data)
+		versions[strings.TrimPrefix(path, "static/")] = hex.EncodeToString(sum[:])[:assetVersionLength]
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("hash static files: %w", err)
+	}
+
+	return versions, nil
 }
 
 // Handler returns the server's HTTP handler.
@@ -224,6 +274,8 @@ func (s *Server) routes() http.Handler {
 
 	mux.HandleFunc("GET /{$}", s.handleOverviewPage)
 	mux.HandleFunc("GET /fragments/overview", s.handleOverviewFragment)
+	mux.HandleFunc("GET /history", s.handleHistoryPage)
+	mux.HandleFunc("GET /fragments/history", s.handleHistoryFragment)
 
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/publicnet/latest", s.handlePublicNetLatest)
