@@ -95,6 +95,12 @@ sudo systemctl enable --now netward
 
 Follow the logs with `journalctl -u netward -f`. After changing the configuration, run `sudo systemctl restart netward`.
 
+### Updating
+
+To update a netward that runs from a checkout on the same machine, run [`deploy/redeploy.sh`](./deploy/redeploy.sh) as your normal user. It runs `git pull`, builds netward, installs it to `/usr/local/bin/netward`, restarts the service and prints the last log lines if netward does not come back up. Pass `--no-pull` to build the checkout as it is. The script needs Go and asks for sudo to install and restart.
+
+netward applies database migrations itself on start, and options missing from the configuration keep their defaults. The script does not change `/etc/netward/netward.yaml` or the installed unit: it warns when `deploy/systemd/netward.service` differs from the installed one, so that you can review and copy it yourself. If netward fails to start after an update because of an unknown option, compare your configuration with `netward.example.yaml`.
+
 ## Disclaimer
 
 netward is a hobby project. Its authors maintain it for their own home networks and for fun, and it is not intended for production use.

@@ -59,7 +59,7 @@ internal/service/       orchestration and logging per feature
   history/              derives change events from consecutive snapshots
   probelog/             shared probe logging helpers
 internal/web/           HTTP server, HTML templates, static assets, JSON API
-deploy/systemd/         example systemd unit
+deploy/                 example systemd unit (systemd/) and redeploy.sh to update an installed netward
 ```
 
 Dependency direction: `cmd` → `app` → `service`, `web`, `adapter`, `config` → `domain`. Domain packages import only the standard library and `domain/probe`. Services define small interfaces for what they need (for example `domainip.Resolver`) and receive implementations through a `Config` struct; they must not construct adapters themselves. Only `internal/app` knows the concrete types.
