@@ -1,5 +1,5 @@
-/* netward's stylesheet. Colors are tokens on :root: dark slate surfaces with
-   a green accent, and a light theme for light system settings. The fonts
+/* netward's stylesheet. Colors are tokens on :root: near-black surfaces
+   with a green accent, and a light theme for light system settings. The fonts
    are embedded (see fonts/*-OFL.txt for their licenses). */
 
 @font-face {
@@ -20,23 +20,25 @@
 
 :root {
   color-scheme: dark;
-  --bg: #0f172a;
-  --surface: #1b2336;
-  --surface-2: #232c41;
-  --text: #f8fafc;
-  --muted: #94a3b8;
-  --line: #2a3449;
-  --line-strong: #475569;
+  --bg: #08090c;
+  --surface: #111318;
+  --surface-2: #1a1d24;
+  --text: #eef0f4;
+  --strong: #ffffff;
+  --muted: #9aa1ad;
+  --line: #22262e;
+  --line-strong: #3a3f4a;
+  --copy: #c8cdd6;
   --accent: #22c55e;
-  --on-accent: #0f172a;
+  --on-accent: #08090c;
   --ok-fg: #4ade80;
   --ok-bg: rgb(34 197 94 / 14%);
   --warn-fg: #fbbf24;
   --warn-bg: rgb(245 158 11 / 14%);
   --fail-fg: #f87171;
   --fail-bg: rgb(239 68 68 / 15%);
-  --off-fg: #94a3b8;
-  --off-bg: rgb(148 163 184 / 12%);
+  --off-fg: #9aa1ad;
+  --off-bg: rgb(154 161 173 / 12%);
   --public: #38bdf8;
   --private: #a78bfa;
   --domains: #fb923c;
@@ -55,9 +57,11 @@
     --surface: #ffffff;
     --surface-2: #f8fafc;
     --text: #0f172a;
+    --strong: #020617;
     --muted: #475569;
     --line: #e2e8f0;
     --line-strong: #cbd5e1;
+    --copy: #334155;
     --accent: #15803d;
     --on-accent: #ffffff;
     --ok-fg: #15803d;
@@ -246,9 +250,10 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 .label { font-weight: 500; overflow-wrap: anywhere; }
 .row-head .status { margin-left: auto; }
 
-.value { display: flex; align-items: center; gap: 4px; min-height: 30px; }
+.value { display: flex; align-items: center; gap: 8px; min-height: 32px; }
 .addr {
-  font: 500 0.95rem/1.35 var(--mono);
+  color: var(--strong);
+  font: 600 0.95rem/1.35 var(--mono);
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
   user-select: all;
@@ -307,26 +312,20 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--muted);
+  background: var(--surface-2);
+  color: var(--copy);
   cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 150ms var(--ease), background-color 150ms var(--ease), color 150ms var(--ease);
+  transition: border-color 150ms var(--ease), color 150ms var(--ease);
 }
 .copy[hidden] { display: none; }
 .copy .icon { grid-area: 1 / 1; }
 .copy .icon + .icon { visibility: hidden; }
-.copy:hover, .copy:focus-visible { opacity: 1; color: var(--text); background: var(--surface-2); border-color: var(--line); }
-.row:hover .copy, .change:hover .copy { opacity: 1; }
-.copy.copied { opacity: 1; color: var(--ok-fg); }
+.copy:hover, .copy:focus-visible { color: var(--accent); border-color: var(--accent); }
+.copy.copied { color: var(--ok-fg); border-color: var(--ok-fg); }
 .copy.copied .icon:first-child { visibility: hidden; }
 .copy.copied .icon + .icon { visibility: visible; }
-
-@media (hover: none) {
-  .copy { opacity: 1; }
-}
 
 .toast {
   position: fixed;
@@ -405,7 +404,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 
 .change .subject { display: flex; align-items: center; gap: 4px; font-weight: 500; overflow-wrap: anywhere; }
 .what { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; }
-.val { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.val { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .kind { color: var(--muted); font-size: 0.85rem; }
 .arrow { color: var(--muted); }
 .change .message { grid-column: 4; margin: 0; }
