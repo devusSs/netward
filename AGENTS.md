@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for coding agents working on netward. Read [README.md](./README.md) for what netward does from a user's point of view; this file covers how it is built and how to change it.
+Guidance for coding agents working on netward. Read [README.md](./README.md) and [docs/](./docs) for what netward does from a user's point of view; this file covers how it is built and how to change it.
 
 ## Project
 
@@ -19,7 +19,8 @@ It is a hobby project: keep solutions simple and readable rather than enterprise
 - **Do not commit or push.** The maintainer commits themselves. When a task is done, end with `git add` groups (files that belong in one commit) and a commit message for each group.
 - Commit messages use a conventional prefix and a lowercase, past-tense description, for example `feat: added resolver adapter to resolve domains via the system resolver or a custom DNS server`, `fix: …`, `docs: …`, `refactor: …`, `build: …`, `chore: …`.
 - Each group should build, test and lint on its own. Order the groups so that they can be committed one after another.
-- A feature is finished only with documentation (Go doc comments, README when user-visible), tests and zero golangci-lint issues.
+- A feature is finished only with documentation (Go doc comments, `docs/` when user-visible), tests and zero golangci-lint issues.
+- Keep the README short: a summary, a quick start and links into `docs/`. Details belong in the docs.
 - Do not leave throwaway programs (for example `cmd/tmp*`) or generated binaries behind.
 - When something is a design decision with real trade-offs, explain the options and recommend one instead of silently picking.
 
@@ -83,7 +84,7 @@ Follow the existing features as templates (`domainip` is the most recent and sma
 5. `internal/config`: a section with `Enabled`/`Interval`, defaults in `Default()`, checks in `Validate()`, and the same defaults documented in `netward.example.yaml` (a test asserts the example equals `Default()`).
 6. `internal/app`: construct and schedule it; setup errors name the YAML key (`domainip.resolver: …`).
 7. `internal/service/history` and `internal/web`: change events, overview card and `/api/<feature>/latest`.
-8. README: feature list and any new setup steps.
+8. Docs: the checks in `docs/how-it-works.md`, new settings in `docs/configuration.md`, setup steps in `docs/setup.md`.
 
 ## Code standards
 
@@ -123,7 +124,7 @@ The linter configuration in `.golangci.yml` is strict and authoritative; do not 
 - Nothing is loaded from other hosts: no CDNs, hosted web fonts or analytics. All assets are embedded, including the fonts (IBM Plex Sans and JetBrains Mono in `static/fonts`, with their OFL licenses) and the Lucide icons inlined in `templates/page.html`.
 - The Content Security Policy is strict (`script-src 'self'`, no inline scripts or styles, no `eval`). HTMX runs with `allowEval: false` and `allowScriptTags: false`. Do not weaken this; put new behavior in `static/app.js` and new styles in `static/style.css` (with light and dark mode via CSS variables).
 - Internal errors return a generic 500 and are logged; never expose error details or paths in responses.
-- JSON API changes are user-facing: keep responses backward compatible and document new endpoints in the README.
+- JSON API changes are user-facing: keep responses backward compatible and document new endpoints in `docs/api.md`.
 
 ## Security and privacy
 
@@ -133,7 +134,7 @@ The linter configuration in `.golangci.yml` is strict and authoritative; do not 
 
 ## Deployment
 
-- `deploy/systemd/netward.service` runs netward with `DynamicUser`, its config in `/etc/netward/netward.yaml` and its state in `/var/lib/netward` (the working directory, so relative paths in the config land there), plus systemd sandboxing. Keep it working when netward starts needing new files, sockets or system calls, and update the README's systemd section with it.
+- `deploy/systemd/netward.service` runs netward with `DynamicUser`, its config in `/etc/netward/netward.yaml` and its state in `/var/lib/netward` (the working directory, so relative paths in the config land there), plus systemd sandboxing. Keep it working when netward starts needing new files, sockets or system calls, and update `docs/deployment.md` with it.
 - Pings are unprivileged by default (`net.ipv4.ping_group_range`); `ping.privileged: true` with `CAP_NET_RAW` is the alternative.
 - On Linux the gateways are read from `/proc/net/route` and `/proc/net/ipv6_route`; on macOS and the BSDs from the routing table and `netstat -rn`.
 
