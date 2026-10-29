@@ -173,12 +173,12 @@ type DomainIP struct {
 }
 
 // Default returns the default configuration: public and private net checks
-// every minute, domain IP monitoring off, text logs at info level and the web
+// every 15 seconds, domain IP monitoring off, text logs at info level and the web
 // interface on HTTPS port 8443 with a self-signed certificate.
 func Default() Config {
 	const (
-		defaultInterval       = time.Minute
-		defaultDomainInterval = 5 * time.Minute
+		defaultInterval       = 15 * time.Second
+		defaultDomainInterval = 30 * time.Second
 		defaultTimeout        = 5 * time.Second
 		defaultPingCount      = 4
 		defaultRetention      = 30 * 24 * time.Hour

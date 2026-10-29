@@ -6,7 +6,8 @@
 # Path of the SQLite database file.
 database: netward.db
 
-# How long snapshots are kept. 720h are 30 days; 0 keeps them forever.
+# How long snapshots are kept. 720h are 30 days; 0 keeps them forever. Every
+# check stores a snapshot, so shorter intervals need more space.
 retention: 720h
 
 log:
@@ -32,7 +33,7 @@ ping:
 # Public IPv4/IPv6 addresses and internet connectivity.
 publicnet:
   enabled: true
-  interval: 1m
+  interval: 15s
   lookup:
     timeout: 5s
     # Endpoints that answer with the caller's address as plain text.
@@ -47,7 +48,7 @@ publicnet:
 # Private interface addresses and default gateways.
 privatenet:
   enabled: true
-  interval: 1m
+  interval: 15s
   # Find and ping the default IPv4 and IPv6 gateways.
   gateways: true
   # Glob patterns selecting the monitored interfaces. By default all
@@ -60,7 +61,7 @@ privatenet:
 # that a dynamic DNS name follows your public IP address.
 domainip:
   enabled: false
-  interval: 5m
+  interval: 30s
   # DNS server to query, for example 1.1.1.1 or 192.168.178.1:53.
   # Empty uses the system resolver.
   resolver: ""

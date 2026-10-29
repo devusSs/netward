@@ -10,7 +10,7 @@ netward is a web-based tool that monitors your home network, covering both publi
 
 ### Default Configuration
 
-By default, netward monitors:
+By default, netward checks the following every 15 seconds:
 
 - **Public IPv4 and IPv6 addresses**, if available. These are resolved from the host device's perspective using [ipify.org](https://ipify.org) by default.
 - **Private IPv4 and IPv6 addresses**, if available. These are read directly from the host device's network interfaces and cover the private IPv4 ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) and IPv6 unique local addresses (`fc00::/7`). Public IPv6 addresses are covered by the public address lookup above.
@@ -19,7 +19,7 @@ By default, netward monitors:
 
 ### Optional Configuration
 
-The following features can be enabled optionally:
+The following features can be enabled optionally (checked every 30 seconds by default):
 
 - **Domain IP monitoring**, which resolves the configured domains to their IPv4 and IPv6 addresses and records when they change, for example to check that a dynamic DNS name points at your current public IP address. It uses the host device's system resolver by default or a DNS server of your choice, such as `1.1.1.1` or your local DNS server.
 
@@ -45,7 +45,7 @@ The same data is available as JSON:
 - `GET /api/changes?since=24h&limit=100` returns the recent changes, newest first. `since` accepts durations such as `90m`, `24h` or `7d` (at most `7d`).
 - `GET /api/health` reports whether netward is running.
 
-Checks are kept for 30 days by default (`retention` in the configuration).
+Checks are kept for 30 days by default (`retention` in the configuration). Every check is stored, so longer intervals or a shorter retention keep the database smaller.
 
 ## Setup
 
