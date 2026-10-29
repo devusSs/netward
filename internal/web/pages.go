@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/devusSs/netward/internal/domain/domainip"
@@ -20,6 +21,7 @@ import (
 const (
 	pageChangeLimit = 100
 	minutesPerHour  = 60
+	percent         = 100
 	// overviewRefresh and historyRefresh are how often HTMX reloads the
 	// overview and the history, in HTMX's trigger syntax. The history
 	// compares many snapshots, so it refreshes less often.
@@ -47,13 +49,23 @@ type value struct {
 	Copy   string
 }
 
+// stat is a measurement shown prominently, for example the latency of a
+// ping. Unit is empty when there is no value.
+type stat struct {
+	Label string
+	Value string
+	Unit  string
+}
+
 // row is one line of a card: a probe, an address or a domain. Values are
-// shown one per line, Details as small facts below them.
+// shown one per line, Stats as large measurements and Details as small facts
+// below them.
 type row struct {
 	Label     string
 	CopyLabel bool
 	Status    probe.Status
 	Values    []value
+	Stats     []stat
 	Details   []string
 	Message   string
 }
@@ -303,8 +315,12 @@ func (s *Server) publicCard(snap *publicnet.Snapshot, now time.Time) card {
 		label string
 		probe publicnet.ConnProbe
 	}{{"Internet (IPv4)", snap.ConnIPv4}, {"Internet (IPv6)", snap.ConnIPv6}} {
-		c.Rows = append(c.Rows, resultRow(p.label, p.probe.Result, pingDetails(p.probe.Result, p.probe.Ping),
-			addrValue(p.probe.Target)))
+		// The target is only the server that is pinged, so it is a detail
+		// rather than an address of this network.
+		r := resultRow(p.label, p.probe.Result, details(targetText(p.probe.Target)))
+		r.Values = nil
+		r.Stats = pingStats(p.probe.Result, p.probe.Ping)
+		c.Rows = append(c.Rows, r)
 	}
 
 	return summarize(c)
@@ -335,8 +351,9 @@ func (s *Server) privateCard(snap *privatenet.Snapshot, now time.Time) card {
 		label string
 		probe privatenet.GatewayProbe
 	}{{"Gateway (IPv4)", snap.GatewayIPv4}, {"Gateway (IPv6)", snap.GatewayIPv6}} {
-		c.Rows = append(c.Rows, resultRow(p.label, p.probe.Result, pingDetails(p.probe.Result, p.probe.Ping),
-			addrValue(p.probe.Addr)))
+		r := resultRow(p.label, p.probe.Result, nil, addrValue(p.probe.Addr))
+		r.Stats = pingStats(p.probe.Result, p.probe.Ping)
+		c.Rows = append(c.Rows, r)
 	}
 
 	return summarize(c)
@@ -414,6 +431,7 @@ func resultRow(label string, r probe.Result, details []string, values ...value) 
 		CopyLabel: false,
 		Status:    r.Status,
 		Values:    shown,
+		Stats:     nil,
 		Details:   details,
 		Message:   message,
 	}
@@ -453,17 +471,36 @@ func durationText(r probe.Result) string {
 	return msText(r.Duration)
 }
 
-func pingDetails(r probe.Result, p probe.PingStats) []string {
+func targetText(target netip.Addr) string {
+	if !target.IsValid() {
+		return ""
+	}
+
+	return "Ping target " + target.String()
+}
+
+// pingStats shows the average round-trip time, the jitter and the packet
+// loss of a ping. Without replies there is no latency or jitter.
+func pingStats(r probe.Result, p probe.PingStats) []stat {
 	if r.Status == probe.StatusDisabled || p.PacketsSent == 0 {
 		return nil
 	}
 
-	facts := []string{fmt.Sprintf("%d/%d replies", p.PacketsReceived, p.PacketsSent)}
+	latency := stat{Label: "Latency", Value: "–", Unit: ""}
+	jitter := stat{Label: "Jitter", Value: "–", Unit: ""}
+
 	if p.PacketsReceived > 0 {
-		facts = append(facts, "avg "+msText(p.RoundTripAvg), "jitter "+msText(p.Jitter))
+		latency.Value, latency.Unit = msValue(p.RoundTripAvg), "ms"
+		jitter.Value, jitter.Unit = msValue(p.Jitter), "ms"
 	}
 
-	return facts
+	loss := stat{Label: "Loss", Value: strconv.Itoa(p.PacketsLost() * percent / p.PacketsSent), Unit: "%"}
+
+	return []stat{latency, jitter, loss}
+}
+
+func msValue(d time.Duration) string {
+	return fmt.Sprintf("%.1f", float64(d.Microseconds())/millisPerSecond)
 }
 
 func msText(d time.Duration) string {

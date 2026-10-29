@@ -271,6 +271,23 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
   white-space: nowrap;
 }
 
+/* Ping results: latency, jitter and loss as large values. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 6px 0 0;
+}
+.stat {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.stat dt { color: var(--muted); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.02em; }
+.stat dd { margin: 0; color: var(--strong); font: 600 1.15rem/1.3 var(--mono); }
+.stat .unit { margin-left: 3px; color: var(--muted); font-size: 0.75rem; font-weight: 500; }
+
 .message { margin: 4px 0 0; color: var(--fail-fg); font-size: 0.85rem; overflow-wrap: anywhere; }
 
 .taken, .note, .empty { color: var(--muted); font-size: 0.85rem; }

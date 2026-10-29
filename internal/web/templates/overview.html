@@ -34,6 +34,13 @@
       <div class="value"><span class="addr">{{.Text}}{{if .Suffix}}<span class="suffix">{{.Suffix}}</span>{{end}}</span>
         {{- if .Copy}}{{template "copy" .Copy}}{{end}}</div>
       {{- end}}
+      {{- if .Stats}}
+      <dl class="stats">
+        {{- range .Stats}}
+        <div class="stat"><dt>{{.Label}}</dt><dd>{{.Value}}{{if .Unit}}<span class="unit">{{.Unit}}</span>{{end}}</dd></div>
+        {{- end}}
+      </dl>
+      {{- end}}
       {{- if .Details}}
       <ul class="facts">
         {{- range .Details}}<li>{{.}}</li>{{end -}}

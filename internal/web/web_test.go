@@ -500,13 +500,17 @@ func TestOverviewPage(t *testing.T) {
 		"<li>api.ipify.org</li><li>166.0 ms</li>",
 		`<span class="status status-unavailable">unavailable</span>`,
 		`<p class="message">ip family unavailable: ipv6: no route to host</p>`,
-		"<li>4/4 replies</li><li>avg 16.7 ms</li><li>jitter 1.6 ms</li>",
+		"<li>Ping target 1.1.1.1</li>",
+		`<div class="stat"><dt>Latency</dt><dd>16.7<span class="unit">ms</span></dd></div>`,
+		`<div class="stat"><dt>Jitter</dt><dd>1.6<span class="unit">ms</span></dd></div>`,
+		`<div class="stat"><dt>Loss</dt><dd>0<span class="unit">%</span></dd></div>`,
 		`<span class="pill status-unavailable">1 unavailable</span>`,
 		`<span class="label">en0</span>`,
 		`<span class="addr">192.168.178.26<span class="suffix">/24</span></span>`,
 		`data-copy="192.168.178.26"`,
 		`<span class="addr">fe80::1%en0</span>`,
-		"<li>0/4 replies</li>",
+		`<div class="stat"><dt>Latency</dt><dd>–</dd></div>`,
+		`<div class="stat"><dt>Loss</dt><dd>100<span class="unit">%</span></dd></div>`,
 		`<span class="pill status-failed">1 failed</span>`,
 		`title="2026-10-11 12:29:18">Checked <time datetime="2026-10-11T12:29:18Z" data-relative>42 s ago</time>`,
 		`<p class="subtitle">via 1.1.1.1:53</p>`,
@@ -517,6 +521,12 @@ func TestOverviewPage(t *testing.T) {
 
 	if strings.Contains(body, "198.51.100.9") {
 		t.Error("the overview shows changes, want them on the history page only")
+	}
+
+	// The ping target is not an address of this network, so it is not shown
+	// like one.
+	if strings.Contains(body, `<span class="addr">1.1.1.1</span>`) {
+		t.Error("the ping target is shown as an address")
 	}
 }
 
