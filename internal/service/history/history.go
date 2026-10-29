@@ -23,10 +23,9 @@ import (
 	"github.com/devusSs/netward/internal/domain/publicnet"
 )
 
-// maxSnapshots is the most snapshots read per feature. At one snapshot per
-// minute it covers about a week; older changes in a longer range are left
-// out.
-const maxSnapshots = 10_000
+// batchSize is how many snapshots are read from the store at a time. It must
+// not exceed what the store returns in one read (sqlite.MaxSnapshots).
+const batchSize = 10_000
 
 // Source is the feature an [Event] belongs to.
 type Source string
@@ -76,6 +75,7 @@ type Store interface {
 // Service computes changes. It is safe for concurrent use.
 type Service struct {
 	store Store
+	batch int
 }
 
 // New returns a service that reads snapshots from store.
@@ -84,7 +84,7 @@ func New(store Store) (*Service, error) {
 		return nil, errors.New("store is required")
 	}
 
-	return &Service{store: store}, nil
+	return &Service{store: store, batch: batchSize}, nil
 }
 
 // Changes returns up to limit changes that happened at or after since, newest
@@ -94,17 +94,20 @@ func (s *Service) Changes(ctx context.Context, since time.Time, limit int) ([]Ev
 		return nil, fmt.Errorf("limit must be positive, got %d", limit)
 	}
 
-	public, err := series(ctx, since, s.store.PublicNetSnapshots)
+	public, err := series(ctx, since, s.batch, s.store.PublicNetSnapshots,
+		func(snap *publicnet.Snapshot) time.Time { return snap.Timestamp })
 	if err != nil {
 		return nil, fmt.Errorf("read public net snapshots: %w", err)
 	}
 
-	private, err := series(ctx, since, s.store.PrivateNetSnapshots)
+	private, err := series(ctx, since, s.batch, s.store.PrivateNetSnapshots,
+		func(snap *privatenet.Snapshot) time.Time { return snap.Timestamp })
 	if err != nil {
 		return nil, fmt.Errorf("read private net snapshots: %w", err)
 	}
 
-	domains, err := series(ctx, since, s.store.DomainIPSnapshots)
+	domains, err := series(ctx, since, s.batch, s.store.DomainIPSnapshots,
+		func(snap *domainip.Snapshot) time.Time { return snap.Timestamp })
 	if err != nil {
 		return nil, fmt.Errorf("read domain ip snapshots: %w", err)
 	}
@@ -129,17 +132,35 @@ func (s *Service) Changes(ctx context.Context, since time.Time, limit int) ([]Ev
 
 // series returns the snapshots taken at or after since in chronological
 // order, preceded by the last snapshot before since, which serves as the
-// baseline for the first change.
+// baseline for the first change. It reads the snapshots in batches of batch,
+// so a range is complete however many snapshots it holds.
 func series[S any](
 	ctx context.Context,
 	since time.Time,
+	batch int,
 	list func(ctx context.Context, from, to time.Time, limit int) ([]*S, error),
+	timestamp func(*S) time.Time,
 ) ([]*S, error) {
+	var snaps []*S
+
 	end := time.Date(9999, time.December, 31, 0, 0, 0, 0, time.UTC)
 
-	snaps, err := list(ctx, since, end, maxSnapshots)
-	if err != nil {
-		return nil, err
+	for {
+		page, err := list(ctx, since, end, batch)
+		if err != nil {
+			return nil, err
+		}
+
+		snaps = append(snaps, page...)
+
+		if len(page) < batch {
+			break
+		}
+
+		// The batch is full, so older snapshots may follow. The next batch
+		// ends before the oldest one; a feature never takes two snapshots at
+		// the same time, because its checks run one after another.
+		end = timestamp(page[len(page)-1])
 	}
 
 	baseline, err := list(ctx, time.Time{}, since, 1)

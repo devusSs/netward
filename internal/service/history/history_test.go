@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -369,5 +370,48 @@ func TestChangesErrors(t *testing.T) {
 	if _, err = svc.Changes(t.Context(), time.Time{}, 10); err == nil ||
 		!strings.Contains(err.Error(), "read public net snapshots: database down") {
 		t.Errorf("Changes() error = %v, want the store error", err)
+	}
+}
+
+func TestChangesReadsInBatches(t *testing.T) {
+	t.Parallel()
+
+	failed := result(probe.StatusFailed, "i/o timeout")
+
+	store := &fakeStore{
+		public: []*publicnet.Snapshot{
+			public(0, ok(), "203.0.113.7", ok()),
+			public(1, ok(), "203.0.113.7", ok()),
+			public(2, failed, "", ok()),
+			public(3, ok(), "198.51.100.9", ok()),
+			public(4, ok(), "198.51.100.9", ok()),
+			public(5, ok(), "198.51.100.9", ok()),
+			public(6, ok(), "203.0.113.7", ok()),
+			public(7, ok(), "203.0.113.7", ok()),
+		},
+		private: nil,
+		domains: nil,
+		err:     nil,
+	}
+
+	src := history.SourcePublicNet
+	want := []history.Event{
+		event(6, src, "ipv4", history.KindChanged, "198.51.100.9", "203.0.113.7", ""),
+		event(3, src, "ipv4", history.KindChanged, "203.0.113.7", "198.51.100.9", ""),
+		event(3, src, "ipv4", history.KindStatus, "failed", "ok", ""),
+		event(2, src, "ipv4", history.KindStatus, "ok", "failed", "i/o timeout"),
+	}
+
+	for _, batch := range []int{1, 2, 3, 100} {
+		t.Run(strconv.Itoa(batch), func(t *testing.T) {
+			t.Parallel()
+
+			events, err := history.NewWithBatchSize(store, batch).Changes(t.Context(), at(1), 100)
+			if err != nil {
+				t.Fatalf("Changes() error = %v", err)
+			}
+
+			wantEvents(t, events, want)
+		})
 	}
 }

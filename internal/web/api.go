@@ -21,8 +21,7 @@ import (
 
 const (
 	defaultRange = 24 * time.Hour
-	// maxRange keeps change lists within what the history service reads:
-	// about a week of snapshots at the default interval.
+	// maxRange bounds how many snapshots a single change list compares.
 	maxRange           = 7 * 24 * time.Hour
 	defaultChangeLimit = 100
 	maxChangeLimit     = 1000
